@@ -1,0 +1,52 @@
+name: Build check
+
+# 配布物はここから出さない。GitHub は開発リポジトリで、すぐ使える zip は
+# note で配る方針(README 参照)。ここでやるのは「壊れていないこと」の確認だけ。
+# 成果物を Release に添付すると、次の版が出た瞬間に「残ってしまった過去の
+# パッケージ」になり、消す運用が必ず漏れる。だから最初から置かない。
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: nutti/blender-action@v1
+        with:
+          blender-version: "4.5.0"
+
+      - name: 配布 zip が作れることを確認する
+        run: |
+          set -eu
+          mkdir -p dist
+          # 生成は CLI の extension コマンドで行う。bpy.ops.wm.extension_build は
+          # 存在せず、以前の設定はそのままでは動かなかった
+          blender --command extension build --source-dir . --output-dir dist
+          zip=$(ls dist/*.zip)
+          echo "built: $zip"
+          blender --command extension validate "$zip"
+
+      - name: マニフェストとタグの版が一致することを確認する
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -eu
+          tag="${GITHUB_REF_NAME#v}"
+          man=$(sed -n 's/^version *= *"\(.*\)"/\1/p' blender_manifest.toml)
+          echo "tag=$tag manifest=$man"
+          test "$tag" = "$man"
+
+      - name: 開発ビルドの通し番号が残っていないことを確認する
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -eu
+          # scripts/stamp_dev.py が打つ番号。リリースでは空でなければならない
+          if grep -q '^DEV_BUILD = "..*"' __init__.py; then
+            echo "DEV_BUILD が残っています。scripts/install_all.py --release で外してください" >&2
+            exit 1
+          fi

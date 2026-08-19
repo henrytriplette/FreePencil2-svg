@@ -1,0 +1,24 @@
+name: Binary check
+
+# 配布物やレンダー結果をリポジトリに入れない。v2.5.0 の公開時に画像が
+# 混入した前科があるため、CI で止める。
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  binary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 追跡下にバイナリが無いことを確認する
+        run: |
+          set -eu
+          hits=$(git ls-files | grep -E '\.(pyc|zip|blend|blend1|mp4)$' || true)
+          if [ -n "$hits" ]; then
+            echo "追跡してはいけないファイル:" >&2
+            echo "$hits" >&2
+            exit 1
+          fi
+          echo "OK"
