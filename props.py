@@ -174,9 +174,19 @@ def register_props():
             name="Line sensitivity",
             description=(
                 "Scale the line-detection thresholds inside the node group. "
-                "Lower = weaker edges also become solid lines (1.0 = original)"
+                "Lower = weaker edges also become solid lines (1.0 = raw node)"
             ),
-            default=1.0,
+            # 既定を 0.5 にする。1.0 はノードの素の値で、塗り分けは
+            # できているのに検出しきい値に届かず線が出ない境界が多かった。
+            # 線が出るかは RGB距離で決まり、境目は実測で 0.05〜0.14。
+            # 明度の近い隣接色(水色と白など)がここを越えられていない。
+            #
+            # 実測(1920等倍・4モデルのインク):
+            #   戦車 0.0855 -> 0.0919 / メカ 0.1048 -> 0.1110
+            #   帆船 0.0482 -> 0.0534 / カメラ 0.0894 -> 0.1004
+            # 目視でも索具が点線から実線になり、ノイズは増えなかった。
+            # 0.35 まで下げてもメカは破綻しないので余裕を残して 0.5。
+            default=0.5,
             min=0.05,
             max=2.0,
             step=0.05,

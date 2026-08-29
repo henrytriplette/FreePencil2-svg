@@ -94,6 +94,9 @@ class FP_OT_AUTO_SETUP(vertex_color.FPProgressModalMixin, bpy.types.Operator):
             for o in targets for m in o.modifiers)
         if scene.fp_auto_bone:
             scene.fp_bone_color = has_rig
+        # 線の強さも自動化に含める。ここを触らないと、古いファイルに
+        # 残った 1.0 がそのまま使われて線が弱いままになる
+        scene.fp_line_sensitivity = 0.5
         scene.fp_node_type = 'pro'
         if scene.fp_auto_aa:
             scene.fp_include_antialiasing = True

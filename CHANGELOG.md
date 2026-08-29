@@ -1,5 +1,28 @@
 # FreePencil2 - Changelog
 
+## [2.7.0] - 2026-08-23
+### Changed
+- **Line sensitivity now defaults to 0.5 (was 1.0), and STEP0 sets it.**
+  The paint separation was already correct, but many boundaries never
+  reached the detection threshold, so no line appeared. Whether a line
+  shows is decided by RGB distance (measured cut-off 0.05-0.14), and
+  neighbouring colours that are close in luminance - pale blue against
+  white, for instance - sat below it.
+
+  Measured ink at 1920, no supersampling:
+
+  | model | 1.0 | 0.5 |
+  |---|---|---|
+  | tank | 0.0855 | 0.0919 |
+  | mech | 0.1048 | 0.1110 |
+  | ship | 0.0482 | 0.0534 |
+  | camera | 0.0894 | 0.1004 |
+
+  Rigging that used to break into dashes is now continuous, and no noise
+  was introduced; the dense mech stays clean even at 0.35, so 0.5 leaves
+  headroom. **This changes the output of existing files** - raise the
+  slider back to 1.0 in STEP3 to get the previous look.
+
 ## [2.6.2] - 2026-08-08
 ### Fixed
 - **A file saved in 5.2 and opened in 4.5 can now be repaired by pressing

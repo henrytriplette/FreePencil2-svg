@@ -826,6 +826,9 @@ def t22():
     group = bpy.data.node_groups["FreePencil_v1_1_0_pro"]
     depth = group.nodes["ColorRamp.001"]
     bone = group.nodes["ColorRamp.002"]
+    # 基準は「感度1.0のときの位置」。既定が 0.5 になったので、
+    # 明示しないと基準自体がずれて以降の掛け算が合わなくなる
+    scene.fp_line_sensitivity = 1.0
     base_depth = depth.color_ramp.elements[1].position
     base_bone = bone.color_ramp.elements[1].position
 
