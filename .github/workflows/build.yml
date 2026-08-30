@@ -2,8 +2,10 @@ name: Build check
 
 # 配布物はここから出さない。GitHub は開発リポジトリで、すぐ使える zip は
 # note で配る方針(README 参照)。ここでやるのは「壊れていないこと」の確認だけ。
-# 成果物を Release に添付すると、次の版が出た瞬間に「残ってしまった過去の
-# パッケージ」になり、消す運用が必ず漏れる。だから最初から置かない。
+#
+# 第三者の action は使わない。以前 nutti/blender-action@v1 を参照していたが
+# その action は存在せず、「Set up job」の段階で毎回落ちていた(v2.7.0 の
+# タグ push で発覚)。Blender は公式配布から直接取る。
 
 on:
   push:
@@ -11,34 +13,32 @@ on:
     tags: ["v*"]
   pull_request:
 
+env:
+  BLENDER_VERSION: "4.5.2"
+  BLENDER_SERIES: "Blender4.5"
+
 jobs:
-  build:
+  meta:
+    # Blender を要さない検査。落ちるならここで早く落ちてほしい
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: nutti/blender-action@v1
-        with:
-          blender-version: "4.5.0"
-
-      - name: 配布 zip が作れることを確認する
+      - name: マニフェストと bl_info の版が一致することを確認する
         run: |
           set -eu
-          mkdir -p dist
-          # 生成は CLI の extension コマンドで行う。bpy.ops.wm.extension_build は
-          # 存在せず、以前の設定はそのままでは動かなかった
-          blender --command extension build --source-dir . --output-dir dist
-          zip=$(ls dist/*.zip)
-          echo "built: $zip"
-          blender --command extension validate "$zip"
+          man=$(sed -n 's/^version *= *"\(.*\)"/\1/p' blender_manifest.toml)
+          info=$(sed -n 's/.*"version": *(\([0-9]*\), *\([0-9]*\), *\([0-9]*\)).*/\1.\2.\3/p' __init__.py | head -1)
+          echo "manifest=$man  bl_info=$info"
+          test "$man" = "$info"
 
-      - name: マニフェストとタグの版が一致することを確認する
+      - name: タグを打ったなら版が一致することを確認する
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -eu
           tag="${GITHUB_REF_NAME#v}"
           man=$(sed -n 's/^version *= *"\(.*\)"/\1/p' blender_manifest.toml)
-          echo "tag=$tag manifest=$man"
+          echo "tag=$tag  manifest=$man"
           test "$tag" = "$man"
 
       - name: 開発ビルドの通し番号が残っていないことを確認する
@@ -46,7 +46,33 @@ jobs:
         run: |
           set -eu
           # scripts/stamp_dev.py が打つ番号。リリースでは空でなければならない
-          if grep -q '^DEV_BUILD = "..*"' __init__.py; then
+          if grep -qE '^DEV_BUILD = "[^"]+"' __init__.py; then
             echo "DEV_BUILD が残っています。scripts/install_all.py --release で外してください" >&2
             exit 1
           fi
+          echo "OK"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Blender を取得する
+        run: |
+          set -eu
+          url="https://download.blender.org/release/${BLENDER_SERIES}/blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+          echo "$url"
+          curl -fsSL "$url" -o blender.tar.xz
+          mkdir -p "$HOME/blender"
+          tar -xJf blender.tar.xz -C "$HOME/blender" --strip-components=1
+          "$HOME/blender/blender" --version
+
+      - name: 配布 zip が作れて検証を通ることを確認する
+        run: |
+          set -eu
+          mkdir -p dist
+          "$HOME/blender/blender" --command extension build \
+            --source-dir . --output-dir dist
+          zip=$(ls dist/*.zip)
+          echo "built: $zip ($(stat -c%s "$zip") bytes)"
+          "$HOME/blender/blender" --command extension validate "$zip"
