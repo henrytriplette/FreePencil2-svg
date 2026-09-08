@@ -206,8 +206,8 @@ def export_color_ramp(node_var: str, nd) -> list[str]:
         f"# Original: {len(elements)} elements",
         f"ramp = {node_var}.color_ramp",
         "",
-        "# Blender の仕様: ColorRamp は最低 2 要素が必要",
-        "# 戦略: デフォルト要素を直接上書きする",
+        "# Blender の仕様: ColorRamp は要素を 0 個にできない",
+        "# 戦略: 既定要素を残して上書きする",
         "",
     ]
 
@@ -225,23 +225,29 @@ def export_color_ramp(node_var: str, nd) -> list[str]:
             f"ramp.elements[1].color = ({sorted_elements[1].color[0]:.6f}, {sorted_elements[1].color[1]:.6f}, {sorted_elements[1].color[2]:.6f}, {sorted_elements[1].color[3]:.6f})",
         ])
 
-    # 要素が 3 つ以上の場合：手動削除 → 再構築
+    # それ以外（3 つ以上、あるいは 1 つ）: 既定要素を 1 つ残して再構築
     else:
+        # 全要素を消そうとすると最後の 1 つで必ず失敗し、Blender が
+        # 「Element not found in element collection or last element」を
+        # コンソールに出す (try/except では消せない。RNA が report する)。
+        # しかもその 1 つが余分な要素として残ってしまうので、
+        # 既定要素を 1 つだけ残して 1 番目として上書きする。
         L.extend([
-            f"# {len(sorted_elements)} 要素の場合: 手動削除後に再構築",
-            "# Blender 4.3 対応: clear() の代わりに手動削除",
-            "elements_to_remove = list(ramp.elements)",
-            "for elem in elements_to_remove:",
-            "    try:",
-            "        ramp.elements.remove(elem)",
-            "    except:",
-            "        pass",
+            f"# {len(sorted_elements)} 要素の場合: 既定要素を 1 つ残して再構築",
+            "while len(ramp.elements) > 1:",
+            "    ramp.elements.remove(ramp.elements[-1])",
             "",
         ])
 
         for i, e in enumerate(sorted_elements):
+            if i == 0:
+                L.extend([
+                    "elem_0 = ramp.elements[0]",
+                    f"elem_0.position = {e.position:.10f}",
+                ])
+            else:
+                L.append(f"elem_{i} = ramp.elements.new({e.position:.10f})")
             L.extend([
-                f"elem_{i} = ramp.elements.new({e.position:.10f})",
                 f"elem_{i}.color = ({e.color[0]:.6f}, {e.color[1]:.6f}, {e.color[2]:.6f}, {e.color[3]:.6f})",
                 "",
             ])
