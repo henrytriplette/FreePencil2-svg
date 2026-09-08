@@ -62,6 +62,22 @@ Each source can be switched on or off independently.
 path (`fp_ch_bone` defaults to 1.0). On a plotter they add too many lines, so
 turn them on only if you want them.
 
+### Layers (assigning pens)
+
+The output can be split into SVG layers (`Single layer` / `By line source` /
+`By object`). vpype and Inkscape read these, so you can assign a different pen
+to each.
+
+Chaining and draw-order sorting stay inside a layer, so splitting increases
+both the path count and the pen travel (measured: 3286 paths / 2997 mm ->
+5210 / 6434 by source, 5627 / 7583 by object). If you do not need separate
+pens, a single layer plots fastest.
+
+**The silhouette layer is not the outer contour.** It holds every edge where
+adjacent faces flip between front- and back-facing, which on thin-plate CAD
+occurs throughout the interior too. It is not the layer to use for "outline in
+a thick pen".
+
 Measured (a 1,047,642-face CAD model, A4 landscape, 1600 px):
 
 | stage | paths | pen-up travel |

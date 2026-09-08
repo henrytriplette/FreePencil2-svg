@@ -532,6 +532,19 @@ def register_props():
                          "invisible with line_color"),
             default=True
         ),
+        "fp_svg_layers": EnumProperty(
+            name="Layers",
+            description=("Split the output into SVG layers. vpype and "
+                         "Inkscape read these, so you can assign a "
+                         "different pen to each"),
+            items=[
+                ('NONE', "Single layer", "One layer for everything"),
+                ('SOURCE', "By line source",
+                 "Silhouette, color separation, material, bone, open edges"),
+                ('OBJECT', "By object", "One layer per mesh object"),
+            ],
+            default='NONE'
+        ),
         "fp_svg_keep_hidden": BoolProperty(
             name="Keep hidden lines",
             description="Skip hidden-line removal (for diagnosis)",
@@ -586,7 +599,8 @@ def unregister_props():
         "fp_svg_depth_res", "fp_svg_samples", "fp_svg_bias",
         "fp_svg_neighbourhood", "fp_svg_keep_hidden",
         "fp_svg_src_mecha", "fp_svg_src_material", "fp_svg_src_bone",
-        "fp_svg_src_open", "fp_svg_src_silhouette", "fp_svg_respect_paint"
+        "fp_svg_src_open", "fp_svg_src_silhouette", "fp_svg_respect_paint",
+        "fp_svg_layers"
     ]
     
     for prop_name in props_to_clear:

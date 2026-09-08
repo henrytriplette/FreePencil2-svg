@@ -111,6 +111,7 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         col.prop(scene, "fp_svg_merge_tolerance", text=t("Merge (mm)"))
         col.prop(scene, "fp_svg_simplify", text=t("Simplify (mm)"))
         col.prop(scene, "fp_svg_sort", text=t("Sort draw order"))
+        col.prop(scene, "fp_svg_layers", text=t("Layers"))
 
         box = layout.box()
         box.label(text=t("Hidden line removal"))

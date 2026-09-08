@@ -52,10 +52,26 @@
   vertex and each edge is judged from its two endpoints, thresholded at
   0.5 because a plotter cannot draw a half-visible line.
 
+- **Layered SVG output for multi-pen plots.** The export can be split into
+  SVG layers by line source or by object, written with Inkscape's
+  `inkscape:groupmode`/`inkscape:label` attributes so vpype and Inkscape
+  read them as layers. Chaining, merging and draw-order sorting all stay
+  inside a layer, since joining across layers would defeat the point.
+
+  Splitting therefore costs paths and travel (measured: 3286 paths /
+  2997 mm as one layer, 5210 / 6434 by source, 5627 / 7583 by object).
+  The default stays a single layer.
+
+  Caveat found while checking the result: the `silhouette` layer is **not**
+  the outer contour. It is every edge where adjacent faces flip between
+  front- and back-facing, which on thin-plate CAD occurs throughout the
+  interior. A true outline layer would need a separate screen-space test
+  against the depth buffer.
+
 ### Notes
 - The raster pipeline (STEP0-STEP5) is unchanged and remains fully
   available; only the panel order puts SVG export first.
-- Ten regression tests cover the SVG path (49 total, was 39), including
+- Thirteen regression tests cover the SVG path (52 total, was 39), including
   one that pins the pen starting outside the drawing - a case where
   `linesort` previously became a silent no-op.
 

@@ -5,11 +5,19 @@
 それを追跡するとプロッタが輪郭を二重になぞってしまう。辺そのものを出せば
 常に1本の中心線になる。
 
-線になる辺は3種類。
+線の出どころは5つあり、個別に ON/OFF できる(LINE_SOURCES)。
 
-  color  … 面2枚の mecha_color が違う(塗り分け法の線そのもの)
-  open   … 面が2枚ない(開いた縁・非多様体)
-  sil    … カメラから見て表裏が入れ替わる(外形線)
+  mecha      … 面2枚の mecha_color が違う(塗り分け法の線そのもの)
+  material   … マテリアルが変わる
+  bone       … bone_color が違う(既定 OFF。プロッタでは線が増えすぎる)
+  open       … 面が2枚ない(開いた縁・非多様体)
+  silhouette … カメラから見て表裏が入れ替わる(外形線)
+
+STEP4 の mask_color / line_color も見る。ビューポートで消した線が SVG に
+残らないようにするため。
+
+レイヤーに分けて書き出すと、vpype や Inkscape がレイヤーとして読むので、
+ペンを分けられる(外形線だけ太いペン、など)。
 
 隠線処理は Z パスとの照合。辺を等分した各点について、カメラからの距離と
 深度バッファを比べ、手前にあるものだけ残す。
@@ -46,6 +54,18 @@ PAINT_THRESHOLD = 0.5
 # 線の出どころ。ラスタ経路の fp_ch_* に対応する
 LINE_SOURCES = ("mecha", "material", "bone", "open", "silhouette")
 
+# レイヤーに分けるときの優先順。1本の辺が複数の出どころに当てはまるのは
+# 普通なので(塗り分け境界かつ外形線、など)、どれか1つに決める必要がある。
+#
+# 注意: silhouette は「絵の外周」ではない。隣り合う面の表裏が入れ替わる辺
+# すべてなので、薄板の多い CAD では内側にも大量に出る(実測モデルでは
+# silhouette 層に格子やパネルの線が入り、外周だけにはならなかった)。
+# 「外周だけ太いペンで」を期待して使わないこと。層としては意味のある
+# 分割だが、外周が要るなら深度バッファで背景と接する辺を拾う別の処理が要る
+LAYER_PRIORITY = ("silhouette", "mecha", "material", "bone", "open")
+
+INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
+
 # 用紙(mm)。長辺・短辺の順で持ち、向きは絵の縦横比から決める
 PAGE_SIZES = {
     "A5": (148.0, 210.0),
@@ -60,12 +80,14 @@ class SvgOptions:
 
     __slots__ = ("page", "margin", "pen", "merge_tolerance", "simplify",
                  "samples", "bias", "neighbourhood", "depth_res",
-                 "sort", "keep_hidden", "seed", "sources", "respect_paint")
+                 "sort", "keep_hidden", "seed", "sources", "respect_paint",
+                 "layers")
 
     def __init__(self, page="A4", margin=10.0, pen=0.3, merge_tolerance=0.1,
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
                  depth_res=1600, sort=True, keep_hidden=False, seed=42,
-                 sources=None, respect_paint=True):
+                 sources=None, respect_paint=True, layers="NONE"):
+        self.layers = layers
         # bone だけ既定で切ってある。ラスタ経路の fp_ch_bone は 1.0 だが、
         # ボーン境界はプロッタでは線が増えすぎるので出どころとしては任意
         self.sources = dict(mecha=True, material=True, bone=False,
@@ -105,6 +127,7 @@ class SvgOptions:
             sources={s: bool(g(scene, f"fp_svg_src_{s}", s != "bone"))
                      for s in LINE_SOURCES},
             respect_paint=g(scene, "fp_svg_respect_paint", True),
+            layers=g(scene, "fp_svg_layers", "NONE"),
         )
 
 
@@ -288,6 +311,14 @@ def line_edges(obj, depsgraph, cam, opts: "SvgOptions" = None):
         # 出どころ別の本数。重なりがあるので合計は総数より多くなる
         counts = {k: int((m & keep).sum()) for k, m in parts.items()}
 
+        # レイヤー分け用に、辺ごとの出どころを1つへ畳む。優先度の低いほうから
+        # 書いていき、高いもので上書きする
+        labels = np.full(ne, -1, dtype=np.int8)
+        for prio in range(len(LAYER_PRIORITY) - 1, -1, -1):
+            m = parts.get(LAYER_PRIORITY[prio])
+            if m is not None:
+                labels[m] = prio
+
         nv = len(mesh.vertices)
         co = np.empty(nv * 3, dtype=np.float32)
         mesh.vertices.foreach_get("co", co)
@@ -298,7 +329,7 @@ def line_edges(obj, depsgraph, cam, opts: "SvgOptions" = None):
         centers = topo.center.astype(np.float64) @ m4[:3, :3].T + m4[:3, 3]
 
         return {"verts": world, "edges": ev[keep], "centers": centers,
-                "counts": counts}
+                "counts": counts, "labels": labels[keep], "object": obj.name}
     finally:
         eval_obj.to_mesh_clear()
 
@@ -487,7 +518,8 @@ def visible_spans(data, project, depth, opts: SvgOptions, mode: str):
     full = vis.all(axis=1)
     none = ~vis.any(axis=1)
 
-    # 部分可視は外形線をまたぐ辺くらいなので、ここだけ Python で刻む
+    # 部分可視は外形線をまたぐ辺くらいなので、ここだけ Python で刻む。
+    # どの辺から出たかも返す(レイヤー分けで出どころが要る)
     pieces = []
     for i in np.flatnonzero(~full & ~none):
         row = vis[i]
@@ -500,7 +532,8 @@ def visible_spans(data, project, depth, opts: SvgOptions, mode: str):
             while k + 1 < s and row[k + 1]:
                 k += 1
             d = v1[i] - v0[i]
-            pieces.append((v0[i] + d * (j / s), v0[i] + d * ((k + 1) / s)))
+            pieces.append((int(i),
+                           v0[i] + d * (j / s), v0[i] + d * ((k + 1) / s)))
             j = k + 1
     return full, pieces
 
@@ -546,31 +579,55 @@ def chain_edges(edges: np.ndarray) -> list:
     return chains
 
 
+def _layer_keys(data, opts: SvgOptions, n: int) -> np.ndarray:
+    """辺ごとのレイヤー名。分けない場合は全部同じ名前になる。"""
+    if opts.layers == "SOURCE":
+        names = np.array(LAYER_PRIORITY + ("other",))
+        idx = np.where(data["labels"] < 0, len(LAYER_PRIORITY),
+                       data["labels"])
+        return names[idx]
+    if opts.layers == "OBJECT":
+        return np.full(n, data["object"], dtype=object)
+    return np.full(n, "lines", dtype=object)
+
+
 def visible_polylines(collected: list, project, depth, opts: SvgOptions,
                       mode: str) -> tuple:
-    """見えている線をピクセル座標の折れ線にする。統計も返す。"""
-    polylines = []
+    """見えている線を、レイヤーごとのピクセル座標の折れ線にする。
+
+    鎖はレイヤーをまたがずに作る。またいで繋ぐと、外形線と内側の線が
+    1本になってペンを分けられなくなる。分けない設定(layers=NONE)では
+    全部が同じレイヤーなので、従来どおり最長まで繋がる。
+    """
+    groups = defaultdict(list)
     counts = defaultdict(int)
     n_edges = 0
     for data in collected:
         for k, v in data["counts"].items():
             counts[k] += v
-        n_edges += len(data["edges"])
+        edges = data["edges"]
+        n_edges += len(edges)
         verts = data["verts"]
 
         full, pieces = visible_spans(data, project, depth, opts, mode)
-        for path in chain_edges(data["edges"][full]):
-            x_px, y_px, _, _, _ = project(verts[np.asarray(path)])
-            polylines.append(np.stack([x_px, y_px], axis=1))
+        keys = _layer_keys(data, opts, len(edges))
+
+        for name in dict.fromkeys(keys[full].tolist()):
+            sel = full & (keys == name)
+            for path in chain_edges(edges[sel]):
+                x_px, y_px, _, _, _ = project(verts[np.asarray(path)])
+                groups[name].append(np.stack([x_px, y_px], axis=1))
 
         if pieces:
-            x_px, y_px, _, _, _ = project(np.asarray(pieces).reshape(-1, 3))
-            polylines.extend(
-                list(np.stack([x_px, y_px], axis=1).reshape(-1, 2, 2)))
+            pts = np.asarray([p for _, a, b in pieces for p in (a, b)])
+            x_px, y_px, _, _, _ = project(pts)
+            xy = np.stack([x_px, y_px], axis=1).reshape(-1, 2, 2)
+            for (edge_i, _, _), seg in zip(pieces, xy):
+                groups[keys[edge_i]].append(seg)
 
     # 重なりがあるので、出どころ別の合計は edges_line より多くなる
     stats = {"edges_line": int(n_edges), "edges_by_source": dict(counts)}
-    return polylines, stats
+    return dict(groups), stats
 
 
 # ------------------------------------------------- プロッタ向けの後処理
@@ -754,54 +811,86 @@ def page_mm(page: str, width: int, height: int) -> tuple:
     return (long_, short) if width >= height else (short, long_)
 
 
-def build_svg(polylines_px: list, width: int, height: int,
-              opts: SvgOptions) -> tuple:
-    """ピクセル座標の折れ線を mm に移し、SVG 文字列と統計を返す。"""
+def _layer_order(names) -> list:
+    """レイヤーの並びを決める。出どころ別なら優先順、それ以外は名前順。"""
+    known = [n for n in LAYER_PRIORITY if n in names]
+    rest = sorted(n for n in names if n not in LAYER_PRIORITY)
+    return known + rest
+
+
+def build_svg(groups, width: int, height: int, opts: SvgOptions) -> tuple:
+    """レイヤーごとの折れ線を mm に移し、SVG 文字列と統計を返す。
+
+    結合も並べ替えもレイヤーの中だけで行う。またいで結合するとペンを
+    分けられなくなるし、並べ替えをまたぐとペンの持ち替えが増える。
+    """
+    if isinstance(groups, list):        # 単層で呼ばれた場合
+        groups = {"lines": groups}
+
     page_w, page_h = page_mm(opts.page, width, height)
     scale = min((page_w - 2 * opts.margin) / width,
                 (page_h - 2 * opts.margin) / height)
     off_x = (page_w - width * scale) * 0.5
     off_y = (page_h - height * scale) * 0.5
 
-    mm_lines = []
-    for pl in polylines_px:
-        mm = np.empty_like(pl)
-        mm[:, 0] = off_x + pl[:, 0] * scale
-        mm[:, 1] = off_y + pl[:, 1] * scale
-        mm_lines.append(mm)
-
-    stats = {"paths_raw": len(mm_lines),
-             "pen_up_mm_raw": round(pen_up_travel(mm_lines), 1)}
-
-    # つないでから間引く。逆にすると継ぎ目で折れが残る
-    merged = linemerge(mm_lines, opts.merge_tolerance)
-    stats["paths_merged"] = len(merged)
-
-    lines = [s for s in (rdp(ln, opts.simplify) for ln in merged)
-             if len(s) >= 2]
-    if opts.sort:
-        lines = linesort(lines)
-    stats["pen_up_mm"] = round(pen_up_travel(lines), 1)
+    raw_total = sum(len(v) for v in groups.values())
+    stats = {"paths_raw": raw_total, "layers": {}}
 
     body = []
     points = 0
-    for mm in lines:
-        points += len(mm)
-        coords = " ".join(f"{x:.3f},{y:.3f}" for x, y in mm)
-        body.append(f'<polyline points="{coords}"/>')
+    paths = 0
+    pen_up = 0.0
+    merged_total = 0
 
+    for i, name in enumerate(_layer_order(groups.keys()), start=1):
+        mm_lines = []
+        for pl in groups[name]:
+            mm = np.empty_like(pl)
+            mm[:, 0] = off_x + pl[:, 0] * scale
+            mm[:, 1] = off_y + pl[:, 1] * scale
+            mm_lines.append(mm)
+
+        # つないでから間引く。逆にすると継ぎ目で折れが残る
+        merged = linemerge(mm_lines, opts.merge_tolerance)
+        merged_total += len(merged)
+        lines = [s for s in (rdp(ln, opts.simplify) for ln in merged)
+                 if len(s) >= 2]
+        if opts.sort:
+            lines = linesort(lines)
+        pen_up += pen_up_travel(lines)
+
+        rows = []
+        for mm in lines:
+            points += len(mm)
+            coords = " ".join(f"{x:.3f},{y:.3f}" for x, y in mm)
+            rows.append(f'<polyline points="{coords}"/>')
+        paths += len(rows)
+        stats["layers"][name] = len(rows)
+
+        if opts.layers == "NONE":
+            attrs = ""
+        else:
+            # vpype と Inkscape はこの2属性でレイヤーとして読む
+            attrs = (f' inkscape:groupmode="layer" inkscape:label="{name}"'
+                     f' id="layer{i}"')
+        body.append(
+            f'<g{attrs} fill="none" stroke="#000000"'
+            f' stroke-width="{opts.pen}"\n'
+            '   stroke-linecap="round" stroke-linejoin="round">\n'
+            + "\n".join(rows) + "\n</g>")
+
+    ns = "" if opts.layers == "NONE" else f'\n     xmlns:inkscape="{INKSCAPE_NS}"'
     svg = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<svg xmlns="http://www.w3.org/2000/svg" version="1.1"\n'
+        f'<svg xmlns="http://www.w3.org/2000/svg" version="1.1"{ns}\n'
         f'     width="{page_w}mm" height="{page_h}mm"\n'
         f'     viewBox="0 0 {page_w} {page_h}">\n'
-        f'<g fill="none" stroke="#000000" stroke-width="{opts.pen}"\n'
-        '   stroke-linecap="round" stroke-linejoin="round">\n'
         + "\n".join(body)
-        + "\n</g>\n</svg>\n"
+        + "\n</svg>\n"
     )
-    stats.update({"page_mm": [page_w, page_h], "paths": len(body),
-                  "points": points})
+    stats.update({"page_mm": [page_w, page_h], "paths": paths,
+                  "paths_merged": merged_total, "points": points,
+                  "pen_up_mm": round(pen_up, 1)})
     return svg, stats
 
 
@@ -838,8 +927,8 @@ def export_svg(context, filepath: str, opts: SvgOptions,
         depth, project, np.concatenate([d["centers"] for d in collected]),
         opts.seed)
 
-    polylines, stats = visible_polylines(collected, project, depth, opts, mode)
-    svg, svg_stats = build_svg(polylines, width, height, opts)
+    groups, stats = visible_polylines(collected, project, depth, opts, mode)
+    svg, svg_stats = build_svg(groups, width, height, opts)
 
     Path(filepath).write_text(svg, encoding="utf-8")
 

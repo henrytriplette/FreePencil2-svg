@@ -83,6 +83,9 @@ def parse_args() -> argparse.Namespace:
                         "例: mecha,material,silhouette")
     p.add_argument("--ignore-paint", action="store_true",
                    help="STEP4 の mask_color / line_color を無視する")
+    p.add_argument("--layers", default="NONE",
+                   choices=["NONE", "SOURCE", "OBJECT"],
+                   help="SVG レイヤーへの分け方(ペンを分けるときに使う)")
     return p.parse_args(argv)
 
 
@@ -202,6 +205,7 @@ def main() -> None:
 
     opts = svg_export.SvgOptions(
         sources=sources, respect_paint=not args.ignore_paint,
+        layers=args.layers,
         page=args.page, margin=args.margin, pen=args.pen,
         merge_tolerance=args.merge_tolerance, simplify=args.simplify,
         samples=args.samples, bias=args.bias,

@@ -1891,6 +1891,111 @@ def t49():
     assert without == 0, f"bone を切ったのに線が出た: {without} 本"
 
 
+def _drawn_length(svg_text):
+    """SVG に書かれた polyline の総延長(mm)。レイヤー分けで幾何が変わって
+    いないことを見るのに使う。"""
+    import re
+    total = 0.0
+    for m in re.finditer(r'points="([^"]+)"', svg_text):
+        pts = np.array([[float(v) for v in q.split(",")]
+                        for q in m.group(1).split()])
+        total += float(np.hypot(*(pts[1:] - pts[:-1]).T).sum())
+    return total
+
+
+@test("SVG: layers=SOURCE writes one Inkscape layer per line source")
+def t50():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        st = svg_export.export_svg(
+            bpy.context, str(tmp / "layered.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="SOURCE"))
+        text = (tmp / "layered.svg").read_text(encoding="utf-8")
+
+        assert "inkscape:groupmode=\"layer\"" in text, (
+            "Inkscape のレイヤー属性が無い(vpype が層として読めない)")
+        assert svg_export.INKSCAPE_NS in text, "名前空間の宣言が無い"
+
+        names = set(st["layers"])
+        assert names, "レイヤーの統計が空"
+        assert names <= set(svg_export.LAYER_PRIORITY) | {"other"}, names
+        for name in names:
+            assert f'inkscape:label="{name}"' in text, f"{name} 層が無い"
+        assert st["paths"] == sum(st["layers"].values()), "層別の合計が合わない"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: layers=OBJECT gives one layer per mesh object")
+def t51():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    bpy.ops.mesh.primitive_cube_add(location=(4, 0, 0))
+    objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    fp_batch.apply_white_material(objs)
+    fp_batch.select_meshes()
+    bpy.ops.freepencil.auto_vertex_color()
+    fp_batch.setup_camera_and_light()
+
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        st = svg_export.export_svg(
+            bpy.context, str(tmp / "byobj.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="OBJECT"))
+        got = set(st["layers"])
+        expected = {o.name for o in objs}
+        assert got <= expected, f"知らない層がある: {got - expected}"
+        assert len(got) >= 2, f"オブジェクトごとに分かれていない: {got}"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: layering keeps the drawn geometry, only regrouped")
+def t52():
+    """結合と間引きは切って比べる。linemerge は許容内の端点をくっつける
+    ときに片方の点を捨てるので、1回の結合につき最大 tol だけ描く長さが
+    短くなる(仕様)。層をまたがない側は結合回数が少ないぶん残るため、
+    ここを入れたままだと 0.01% ほどずれて、regroup の検証にならない。"""
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        flat = svg_export.export_svg(
+            bpy.context, str(tmp / "flat.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="NONE",
+                                  simplify=0.0, merge_tolerance=0.0))
+        layered = svg_export.export_svg(
+            bpy.context, str(tmp / "lay.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="SOURCE",
+                                  simplify=0.0, merge_tolerance=0.0))
+
+        a = _drawn_length((tmp / "flat.svg").read_text(encoding="utf-8"))
+        b = _drawn_length((tmp / "lay.svg").read_text(encoding="utf-8"))
+        assert abs(a - b) < max(1e-3, a * 1e-6), (
+            f"レイヤー分けで描く長さが変わった: {a:.4f} -> {b:.4f}")
+
+        # 層をまたいで繋がないぶん、本数は増えるか同じになる
+        assert layered["paths"] >= flat["paths"], (
+            f"層に分けて本数が減った: {flat['paths']} -> {layered['paths']}")
+
+        # 単層のときは Inkscape 属性を書かない(従来の出力のまま)
+        assert "inkscape" not in (tmp / "flat.svg").read_text(
+            encoding="utf-8"), "単層なのにレイヤー属性が付いている"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     print("[tests] FreePencil smoke tests")
     fp_batch.install_addon()
