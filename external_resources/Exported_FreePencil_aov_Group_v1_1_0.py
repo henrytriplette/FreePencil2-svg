@@ -114,22 +114,19 @@ def create_node_tree_freepencil_aov_group_v1_1_0():
     # Original: 8 elements
     ramp = n_10.color_ramp
     
-    # Blenderの仕様: ColorRampは最低2要素が必要
-    # 戦略: デフォルト要素を直接上書きする
+    # Blenderの仕様: ColorRampは要素を0個にできない
+    # 戦略: 既定要素を残して上書きする
     
-    # 8要素の場合: 手動削除後に再構築
-    # Blender 4.3対応: clear()の代わりに手動削除
-    elements_to_remove = list(ramp.elements)
-    for elem in elements_to_remove:
-        try:
-            ramp.elements.remove(elem)
-        except:
-            pass
-    
-    # 削除後の確認
+    # 8要素の場合: 既定要素を1つ残して再構築
+    # 全部消そうとすると最後の1つで必ず失敗し、コンソールに
+    # 「Element not found in element collection or last element」を
+    # 出したうえ、その1つが余分な要素として残る(実測: 8要素のはずが9要素)
+    while len(ramp.elements) > 1:
+        ramp.elements.remove(ramp.elements[-1])
     
     # 要素1: pos=0.000000, color=(0.0, 0.0014692827826365829, 1.0, 1.0)
-    elem_0 = ramp.elements.new(0.0000000000)
+    elem_0 = ramp.elements[0]
+    elem_0.position = 0.0000000000
     elem_0.color = (0.000000, 0.001469, 1.000000, 1.000000)
     
     # 要素2: pos=0.122727, color=(1.0, 0.0, 0.11048056185245514, 1.0)
