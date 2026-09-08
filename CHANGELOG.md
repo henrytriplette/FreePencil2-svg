@@ -62,16 +62,30 @@
   2997 mm as one layer, 5210 / 6434 by source, 5627 / 7583 by object).
   The default stays a single layer.
 
-  Caveat found while checking the result: the `silhouette` layer is **not**
-  the outer contour. It is every edge where adjacent faces flip between
-  front- and back-facing, which on thin-plate CAD occurs throughout the
-  interior. A true outline layer would need a separate screen-space test
-  against the depth buffer.
+  The `silhouette` layer is **not** the outer contour - it is every edge
+  where adjacent faces flip between front- and back-facing, which on
+  thin-plate CAD occurs throughout the interior. Use the outline layer
+  below for that.
+
+- **Outline layer from the depth buffer.** With layers by source, the edges
+  that actually form the outline of the drawing go into their own `outline`
+  layer. Each edge is probed to either side in the depth pass: if one side
+  is background, or drops away by more than `fp_svg_outline_gap` relative
+  to the edge, it is an outline edge.
+
+  This classifies existing edges rather than adding any, so the drawn
+  geometry is unchanged. It is not a line source for that reason - a depth
+  jump in vector form is already the front object's silhouette edge.
+
+  The step threshold tunes how much is picked up. Measured on the CAD
+  model: 1512 outline paths at 0.005, 1083 at 0.02 (default), 410 at 0.10,
+  where it reduces to the machine's outer contour, its feet and the deep
+  grille well.
 
 ### Notes
 - The raster pipeline (STEP0-STEP5) is unchanged and remains fully
   available; only the panel order puts SVG export first.
-- Thirteen regression tests cover the SVG path (52 total, was 39), including
+- Fifteen regression tests cover the SVG path (54 total, was 39), including
   one that pins the pen starting outside the drawing - a case where
   `linesort` previously became a silent no-op.
 

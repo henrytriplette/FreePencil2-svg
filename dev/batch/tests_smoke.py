@@ -1996,6 +1996,83 @@ def t52():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@test("SVG: outline layer appears only when asked for")
+def t53():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        on = svg_export.export_svg(
+            bpy.context, str(tmp / "on.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="SOURCE",
+                                  outline_layer=True, merge_tolerance=0.0,
+                                  simplify=0.0))
+        assert on["layers"].get("outline", 0) > 0, (
+            "外周レイヤーが空。背景に接する辺が拾えていない")
+
+        off = svg_export.export_svg(
+            bpy.context, str(tmp / "off.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="SOURCE",
+                                  outline_layer=False, merge_tolerance=0.0,
+                                  simplify=0.0))
+        assert "outline" not in off["layers"], (
+            "outline_layer=False なのに外周レイヤーが出た")
+
+        # 外周は既存の辺の振り分けであって、線を足すものではない。
+        # 本数は比べられない: 層が増えると鎖の切れ目も増えるので、同じ辺
+        # でもパス数は変わる(実測 435 -> 436)。描く長さで見る
+        a = _drawn_length((tmp / "on.svg").read_text(encoding="utf-8"))
+        b = _drawn_length((tmp / "off.svg").read_text(encoding="utf-8"))
+        assert abs(a - b) < max(1e-3, b * 1e-6), (
+            f"外周レイヤーで描く長さが変わった: {b:.4f} -> {a:.4f}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: a larger outline gap selects a strict subset of edges")
+def t54():
+    from mathutils import Vector
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    # 手前に箱を置いて、背景だけでなく段差でも外周が出る状況にする
+    d = Vector((1.0, -1.0, 0.65)).normalized()
+    bpy.ops.mesh.primitive_cube_add(size=1.1, location=d * 1.35)
+    objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    fp_batch.apply_white_material(objs)
+    fp_batch.select_meshes()
+    bpy.ops.freepencil.auto_vertex_color()
+    fp_batch.setup_camera_and_light()
+
+    scene = bpy.context.scene
+    cam = scene.camera
+    w, h = 400, 300
+    depth = svg_export.render_depth_pass(scene, cam, w, h)
+    dg = bpy.context.evaluated_depsgraph_get()
+    project = svg_export.Projection(cam, dg, w, h)
+
+    tight = svg_export.SvgOptions(outline_gap=0.20)
+    loose = svg_export.SvgOptions(outline_gap=0.005)
+    collected = svg_export.extract_lines(objs, dg, cam, loose)
+    assert collected, "線が出ていない"
+
+    centers = np.concatenate([c["centers"] for c in collected])
+    mode, _ = svg_export.choose_depth_mode(depth, project, centers, 42)
+
+    total_loose = 0
+    for data in collected:
+        m_loose = svg_export.contour_mask(data, project, depth, loose, mode)
+        m_tight = svg_export.contour_mask(data, project, depth, tight, mode)
+        # 段差の条件は "> ref*(1+gap)" なので、gap を上げれば必ず狭くなる
+        assert not (m_tight & ~m_loose).any(), (
+            "gap を上げたのに新しい辺が外周になった")
+        total_loose += int(m_loose.sum())
+    assert total_loose > 0, "外周の辺が1本も無い"
+
+
 def main():
     print("[tests] FreePencil smoke tests")
     fp_batch.install_addon()

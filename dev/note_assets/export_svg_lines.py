@@ -86,6 +86,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--layers", default="NONE",
                    choices=["NONE", "SOURCE", "OBJECT"],
                    help="SVG レイヤーへの分け方(ペンを分けるときに使う)")
+    p.add_argument("--no-outline-layer", action="store_true",
+                   help="外周を専用レイヤーに分けない")
+    p.add_argument("--outline-gap", type=float, default=0.02,
+                   help="外周と見なす深度の段差(相対)")
     return p.parse_args(argv)
 
 
@@ -205,7 +209,8 @@ def main() -> None:
 
     opts = svg_export.SvgOptions(
         sources=sources, respect_paint=not args.ignore_paint,
-        layers=args.layers,
+        layers=args.layers, outline_layer=not args.no_outline_layer,
+        outline_gap=args.outline_gap,
         page=args.page, margin=args.margin, pen=args.pen,
         merge_tolerance=args.merge_tolerance, simplify=args.simplify,
         samples=args.samples, bias=args.bias,

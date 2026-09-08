@@ -73,10 +73,19 @@ both the path count and the pen travel (measured: 3286 paths / 2997 mm ->
 5210 / 6434 by source, 5627 / 7583 by object). If you do not need separate
 pens, a single layer plots fastest.
 
+To draw the outline in a heavier pen, use the **outline layer** (on by
+default). It looks to either side of each edge in the depth buffer and keeps
+only those where one side is background, or drops away sharply behind the
+edge, putting them in an `outline` layer.
+
 **The silhouette layer is not the outer contour.** It holds every edge where
 adjacent faces flip between front- and back-facing, which on thin-plate CAD
-occurs throughout the interior too. It is not the layer to use for "outline in
-a thick pen".
+occurs throughout the interior too. Use the outline layer instead.
+
+**Outline depth step** (default 0.02) controls how fine a step counts.
+Raising it keeps only the larger steps: measured 1512 paths at 0.005, 1083 at
+0.02, and 410 at 0.10 - by then essentially the machine's outer contour and
+its feet.
 
 Measured (a 1,047,642-face CAD model, A4 landscape, 1600 px):
 

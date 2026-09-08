@@ -112,6 +112,10 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         col.prop(scene, "fp_svg_simplify", text=t("Simplify (mm)"))
         col.prop(scene, "fp_svg_sort", text=t("Sort draw order"))
         col.prop(scene, "fp_svg_layers", text=t("Layers"))
+        sub = col.column(align=True)
+        sub.enabled = scene.fp_svg_layers == "SOURCE"
+        sub.prop(scene, "fp_svg_outline_layer", text=t("Outline layer"))
+        sub.prop(scene, "fp_svg_outline_gap", text=t("Outline depth step"))
 
         box = layout.box()
         box.label(text=t("Hidden line removal"))

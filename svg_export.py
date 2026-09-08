@@ -17,7 +17,9 @@ STEP4 の mask_color / line_color も見る。ビューポートで消した線�
 残らないようにするため。
 
 レイヤーに分けて書き出すと、vpype や Inkscape がレイヤーとして読むので、
-ペンを分けられる(外形線だけ太いペン、など)。
+ペンを分けられる。出どころ別に分けるときは、深度バッファで「実際に絵の縁に
+なっている辺」を outline 層へ振り分ける(contour_mask)。silhouette は薄板の
+多いモデルでは内側にも出るので、外周が要るときはこちらを使う。
 
 隠線処理は Z パスとの照合。辺を等分した各点について、カメラからの距離と
 深度バッファを比べ、手前にあるものだけ残す。
@@ -60,9 +62,11 @@ LINE_SOURCES = ("mecha", "material", "bone", "open", "silhouette")
 # 注意: silhouette は「絵の外周」ではない。隣り合う面の表裏が入れ替わる辺
 # すべてなので、薄板の多い CAD では内側にも大量に出る(実測モデルでは
 # silhouette 層に格子やパネルの線が入り、外周だけにはならなかった)。
-# 「外周だけ太いペンで」を期待して使わないこと。層としては意味のある
-# 分割だが、外周が要るなら深度バッファで背景と接する辺を拾う別の処理が要る
-LAYER_PRIORITY = ("silhouette", "mecha", "material", "bone", "open")
+# 外周が要るなら outline を使うこと。こちらは深度バッファで実際に絵の縁に
+# なっている辺だけを拾う(contour_mask)。優先順で outline を先頭に置いて
+# いるのは、太いペンを割り当てたくなるのがここだから
+LAYER_PRIORITY = ("outline", "silhouette", "mecha", "material",
+                  "bone", "open")
 
 INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
 
@@ -81,13 +85,16 @@ class SvgOptions:
     __slots__ = ("page", "margin", "pen", "merge_tolerance", "simplify",
                  "samples", "bias", "neighbourhood", "depth_res",
                  "sort", "keep_hidden", "seed", "sources", "respect_paint",
-                 "layers")
+                 "layers", "outline_layer", "outline_gap")
 
     def __init__(self, page="A4", margin=10.0, pen=0.3, merge_tolerance=0.1,
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
                  depth_res=1600, sort=True, keep_hidden=False, seed=42,
-                 sources=None, respect_paint=True, layers="NONE"):
+                 sources=None, respect_paint=True, layers="NONE",
+                 outline_layer=True, outline_gap=0.02):
         self.layers = layers
+        self.outline_layer = outline_layer
+        self.outline_gap = outline_gap
         # bone だけ既定で切ってある。ラスタ経路の fp_ch_bone は 1.0 だが、
         # ボーン境界はプロッタでは線が増えすぎるので出どころとしては任意
         self.sources = dict(mecha=True, material=True, bone=False,
@@ -128,6 +135,8 @@ class SvgOptions:
                      for s in LINE_SOURCES},
             respect_paint=g(scene, "fp_svg_respect_paint", True),
             layers=g(scene, "fp_svg_layers", "NONE"),
+            outline_layer=g(scene, "fp_svg_outline_layer", True),
+            outline_gap=g(scene, "fp_svg_outline_gap", 0.02),
         )
 
 
@@ -579,6 +588,52 @@ def chain_edges(edges: np.ndarray) -> list:
     return chains
 
 
+def contour_mask(data, project, depth, opts: SvgOptions,
+                 mode: str, offset_px: float = 2.0) -> np.ndarray:
+    """深度バッファを見て、外周(背景か大きな段差に接する辺)を拾う。
+
+    silhouette とは別物。silhouette は「隣り合う面の表裏が入れ替わる辺」で、
+    薄板の多いモデルでは内側にも大量に出る。こちらは画面上で辺の左右を
+    覗き、片側が背景か、手前の面よりずっと奥なら外周と見なす。つまり
+    「実際に絵の縁になっている辺」だけが残る。
+
+    新しい線は足さない。既にある辺のどれが外周かを見分けるだけ。
+    """
+    verts, edges = data["verts"], data["edges"]
+    m = len(edges)
+    if m == 0:
+        return np.zeros(0, dtype=bool)
+
+    v0 = verts[edges[:, 0]]
+    v1 = verts[edges[:, 1]]
+    x0, y0, _, _, _ = project(v0)
+    x1, y1, _, _, _ = project(v1)
+
+    # 画面上での辺の向きに直交する方向へずらして左右を覗く
+    dx, dy = x1 - x0, y1 - y0
+    length = np.hypot(dx, dy)
+    length = np.where(length < 1e-9, 1.0, length)
+    nx = -dy / length * offset_px
+    ny = dx / length * offset_px
+
+    out = np.zeros(m, dtype=bool)
+    for t in (0.25, 0.5, 0.75):
+        p = v0 + (v1 - v0) * t
+        x, y, plane, ray, inside = project(p)
+        ref = ray if mode == "ray" else plane
+
+        near = sample_depth(depth, x + nx, y + ny, 0)
+        far = sample_depth(depth, x - nx, y - ny, 0)
+
+        # NaN = その画素が背景。片側が背景なら、そこは絵の縁
+        background = np.isnan(near) | np.isnan(far)
+        limit = ref * (1.0 + opts.outline_gap)
+        jump = ((np.nan_to_num(near, nan=np.inf) > limit)
+                | (np.nan_to_num(far, nan=np.inf) > limit))
+        out |= inside & (background | jump)
+    return out
+
+
 def _layer_keys(data, opts: SvgOptions, n: int) -> np.ndarray:
     """辺ごとのレイヤー名。分けない場合は全部同じ名前になる。"""
     if opts.layers == "SOURCE":
@@ -611,6 +666,9 @@ def visible_polylines(collected: list, project, depth, opts: SvgOptions,
 
         full, pieces = visible_spans(data, project, depth, opts, mode)
         keys = _layer_keys(data, opts, len(edges))
+        if opts.layers == "SOURCE" and opts.outline_layer:
+            # 外周は出どころではなく見え方で決まるので、ここで上書きする
+            keys[contour_mask(data, project, depth, opts, mode)] = "outline"
 
         for name in dict.fromkeys(keys[full].tolist()):
             sel = full & (keys == name)

@@ -545,6 +545,21 @@ def register_props():
             ],
             default='NONE'
         ),
+        "fp_svg_outline_layer": BoolProperty(
+            name="Outline layer",
+            description=("With layers by source, put the edges that actually "
+                         "form the outline of the drawing (against the "
+                         "background, or across a depth step) into their own "
+                         "layer. Unlike Silhouette, this is decided from the "
+                         "depth buffer, so thin plates do not fill it"),
+            default=True
+        ),
+        "fp_svg_outline_gap": FloatProperty(
+            name="Outline depth step",
+            description=("How much deeper one side of an edge must be, "
+                         "relative to the edge, to count as an outline"),
+            default=0.02, min=0.0, max=1.0, precision=3
+        ),
         "fp_svg_keep_hidden": BoolProperty(
             name="Keep hidden lines",
             description="Skip hidden-line removal (for diagnosis)",
@@ -600,7 +615,7 @@ def unregister_props():
         "fp_svg_neighbourhood", "fp_svg_keep_hidden",
         "fp_svg_src_mecha", "fp_svg_src_material", "fp_svg_src_bone",
         "fp_svg_src_open", "fp_svg_src_silhouette", "fp_svg_respect_paint",
-        "fp_svg_layers"
+        "fp_svg_layers", "fp_svg_outline_layer", "fp_svg_outline_gap"
     ]
     
     for prop_name in props_to_clear:
