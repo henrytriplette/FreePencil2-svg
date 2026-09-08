@@ -87,6 +87,38 @@ Raising it keeps only the larger steps: measured 1512 paths at 0.005, 1083 at
 0.02, and 410 at 0.10 - by then essentially the machine's outer contour and
 its feet.
 
+### Seeing it before you export
+
+**Refresh preview** draws the lines that would be exported straight into the
+3D view, so you can judge line density and what got culled without opening
+the SVG somewhere else.
+
+Hidden-line removal is computed for the render camera, so **it is only
+truthful from camera view** - orbit away and the occlusion no longer matches
+(the line positions still do). It does not follow changes on its own; press
+it again after changing a setting.
+
+### Fitting to the page
+
+| fit | what it does |
+|---|---|
+| Camera frame | keeps the composition; a small subject stays small on paper |
+| Drawing bounds | fits what was actually drawn to the page, so the margin is constant |
+
+**Drawing bounds is the one to prefer.** Beyond a predictable margin, it makes
+the merge tolerance (in mm) behave honestly against the drawing. When the
+drawing is small on the page, unrelated ends fall inside the tolerance and
+only the path count goes down. Measured: 162x125 mm and 3286 paths by camera
+frame, 246x190 mm and 3802 paths by drawing bounds - the latter is the count
+you actually get at that pen size.
+
+### Plot time estimate
+
+Shown in the panel after an export: drawn length, travel length and an
+estimated time, from the pen-down speed, travel speed and the seconds each
+pen lift costs (12.8 to 17.1 minutes for the measured CAD model). It does not
+model acceleration, so treat it as a guide.
+
 Measured (a 1,047,642-face CAD model, A4 landscape, 1600 px):
 
 | stage | paths | pen-up travel |

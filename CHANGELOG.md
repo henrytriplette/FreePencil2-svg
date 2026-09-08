@@ -82,10 +82,35 @@
   where it reduces to the machine's outer contour, its feet and the deep
   grille well.
 
+- **Viewport preview.** `Refresh preview` computes the lines that would be
+  exported and draws them in the 3D view through a `SpaceView3D` draw
+  handler, so the parameters can be judged without opening the SVG in
+  another application. It draws the 3D segments before projection, so no
+  line logic is duplicated for it.
+
+  Occlusion is computed for the render camera, so the preview is only
+  truthful from camera view. It is refreshed on demand rather than live,
+  since the depth pass and extraction take a few seconds on a large scene.
+  The draw handler is removed from the add-on's `unregister`, because
+  submodule `unregister` hooks are not called.
+
+- **Fit the drawing to the page, and estimate the plot.** `Fit` chooses
+  between the camera frame (previous behaviour) and the bounds of what was
+  actually drawn. The latter keeps the margin constant and, more usefully,
+  makes the merge tolerance honest: a drawing that is small on the page
+  lets unrelated line ends fall inside the tolerance. Measured: 162x125 mm
+  / 3286 paths by camera frame against 246x190 mm / 3802 paths by drawing
+  bounds.
+
+  The export now also reports drawn length, travel length and an estimated
+  plot time from the pen-down speed, travel speed and per-lift cost, shown
+  in the panel afterwards (12.8 to 17.1 minutes for the measured model).
+  Acceleration is not modelled.
+
 ### Notes
 - The raster pipeline (STEP0-STEP5) is unchanged and remains fully
   available; only the panel order puts SVG export first.
-- Fifteen regression tests cover the SVG path (54 total, was 39), including
+- Eighteen regression tests cover the SVG path (57 total, was 39), including
   one that pins the pen starting outside the drawing - a case where
   `linesort` previously became a silent no-op.
 

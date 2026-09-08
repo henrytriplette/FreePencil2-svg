@@ -90,6 +90,8 @@ def parse_args() -> argparse.Namespace:
                    help="外周を専用レイヤーに分けない")
     p.add_argument("--outline-gap", type=float, default=0.02,
                    help="外周と見なす深度の段差(相対)")
+    p.add_argument("--fit", default="CAMERA", choices=["CAMERA", "DRAWING"],
+                   help="紙への合わせ方。DRAWING は描いた範囲を紙いっぱいに")
     return p.parse_args(argv)
 
 
@@ -210,7 +212,7 @@ def main() -> None:
     opts = svg_export.SvgOptions(
         sources=sources, respect_paint=not args.ignore_paint,
         layers=args.layers, outline_layer=not args.no_outline_layer,
-        outline_gap=args.outline_gap,
+        outline_gap=args.outline_gap, fit=args.fit,
         page=args.page, margin=args.margin, pen=args.pen,
         merge_tolerance=args.merge_tolerance, simplify=args.simplify,
         samples=args.samples, bias=args.bias,

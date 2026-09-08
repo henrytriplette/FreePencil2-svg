@@ -3,6 +3,7 @@
 import bpy
 import logging
 from bpy.props import (
+    StringProperty,
     FloatProperty,
     FloatVectorProperty,
     IntProperty,
@@ -35,6 +36,25 @@ def _update_far_relief(self, context):
     for ng in bpy.data.node_groups:
         if ng.name.startswith(fp_core.NODE_GROUP_PREFIX):
             fp_core.far_relief_from_scene(ng, scene)
+
+
+def _update_svg_preview(self, context):
+    """プレビューの ON/OFF。切ったら描画ハンドラも外す。"""
+    from . import svg_export
+    if self.fp_svg_preview:
+        if svg_export._preview_segments is None:
+            try:
+                svg_export.refresh_preview(context)
+            except RuntimeError as exc:
+                logger.info(f"SVG preview not ready: {exc}")
+                self["fp_svg_preview"] = False
+                return
+        svg_export.enable_preview()
+    else:
+        svg_export.disable_preview()
+    for area in getattr(context.screen, "areas", ()):
+        if area.type == 'VIEW_3D':
+            area.tag_redraw()
 
 
 def _update_white_preview(self, context):
@@ -532,6 +552,47 @@ def register_props():
                          "invisible with line_color"),
             default=True
         ),
+        "fp_svg_fit": EnumProperty(
+            name="Fit",
+            description="How the drawing is placed on the page",
+            items=[
+                ('CAMERA', "Camera frame",
+                 "Fit the camera frame to the page; the composition is kept, "
+                 "but a small subject stays small on the paper"),
+                ('DRAWING', "Drawing bounds",
+                 "Fit what was actually drawn to the page, so the margin is "
+                 "the same whatever the framing"),
+            ],
+            default='CAMERA'
+        ),
+        "fp_svg_preview": BoolProperty(
+            name="Preview in viewport",
+            description=("Draw the lines that would be exported in the 3D "
+                         "view. Look through the camera: hidden line removal "
+                         "is computed for the render camera"),
+            default=False,
+            update=_update_svg_preview
+        ),
+        "fp_svg_plot_speed": FloatProperty(
+            name="Pen down speed",
+            description="Drawing speed in mm/s, used for the time estimate",
+            default=80.0, min=1.0, max=2000.0
+        ),
+        "fp_svg_travel_speed": FloatProperty(
+            name="Travel speed",
+            description="Pen-up speed in mm/s, used for the time estimate",
+            default=200.0, min=1.0, max=2000.0
+        ),
+        "fp_svg_pen_lift": FloatProperty(
+            name="Pen lift",
+            description="Seconds per pen up/down, used for the time estimate",
+            default=0.12, min=0.0, max=5.0
+        ),
+        "fp_svg_last_result": StringProperty(
+            name="Last export",
+            description="Summary of the most recent SVG export",
+            default=""
+        ),
         "fp_svg_layers": EnumProperty(
             name="Layers",
             description=("Split the output into SVG layers. vpype and "
@@ -615,7 +676,9 @@ def unregister_props():
         "fp_svg_neighbourhood", "fp_svg_keep_hidden",
         "fp_svg_src_mecha", "fp_svg_src_material", "fp_svg_src_bone",
         "fp_svg_src_open", "fp_svg_src_silhouette", "fp_svg_respect_paint",
-        "fp_svg_layers", "fp_svg_outline_layer", "fp_svg_outline_gap"
+        "fp_svg_layers", "fp_svg_outline_layer", "fp_svg_outline_gap",
+        "fp_svg_fit", "fp_svg_preview", "fp_svg_plot_speed",
+        "fp_svg_travel_speed", "fp_svg_pen_lift", "fp_svg_last_result"
     ]
     
     for prop_name in props_to_clear:

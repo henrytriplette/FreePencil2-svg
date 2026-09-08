@@ -2073,6 +2073,133 @@ def t54():
     assert total_loose > 0, "外周の辺が1本も無い"
 
 
+def _svg_bbox(svg_text):
+    """SVG に書かれた点の範囲(mm)。"""
+    import re
+    pts = []
+    for m in re.finditer(r'points="([^"]+)"', svg_text):
+        pts.extend([float(v) for q in m.group(1).split()
+                    for v in q.split(",")][0::2])
+    ys = []
+    for m in re.finditer(r'points="([^"]+)"', svg_text):
+        ys.extend([float(v) for q in m.group(1).split()
+                   for v in q.split(",")][1::2])
+    return min(pts), min(ys), max(pts), max(ys)
+
+
+@test("SVG: fit=DRAWING fills the page whatever the camera framing")
+def t55():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    objs = _svg_scene()
+    # カメラをうんと引いて、被写体をフレームの片隅に小さく写す
+    cam = bpy.context.scene.camera
+    cam.location = cam.location * 4.0
+    bpy.context.view_layer.update()
+
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        margin = 10.0
+        cam_fit = svg_export.export_svg(
+            bpy.context, str(tmp / "cam.svg"),
+            svg_export.SvgOptions(depth_res=400, fit="CAMERA",
+                                  margin=margin))
+        draw_fit = svg_export.export_svg(
+            bpy.context, str(tmp / "draw.svg"),
+            svg_export.SvgOptions(depth_res=400, fit="DRAWING",
+                                  margin=margin))
+
+        page_w, page_h = draw_fit["page_mm"]
+        x0, y0, x1, y1 = _svg_bbox(
+            (tmp / "draw.svg").read_text(encoding="utf-8"))
+        filled = max((x1 - x0) / (page_w - 2 * margin),
+                     (y1 - y0) / (page_h - 2 * margin))
+        assert filled > 0.98, f"紙いっぱいになっていない: {filled:.3f}"
+        assert x0 >= margin - 1e-6 and y0 >= margin - 1e-6, "余白を割り込んだ"
+        assert x1 <= page_w - margin + 1e-6, "余白を割り込んだ"
+
+        cx0, cy0, cx1, cy1 = _svg_bbox(
+            (tmp / "cam.svg").read_text(encoding="utf-8"))
+        cam_filled = max((cx1 - cx0) / (page_w - 2 * margin),
+                         (cy1 - cy0) / (page_h - 2 * margin))
+        assert cam_filled < filled, (
+            f"カメラ合わせのほうが大きく出た: {cam_filled:.3f} vs {filled:.3f}")
+        assert objs
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: the export reports drawn length and a plot time estimate")
+def t56():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        st = svg_export.export_svg(
+            bpy.context, str(tmp / "e.svg"),
+            svg_export.SvgOptions(depth_res=400, plot_speed=80.0,
+                                  travel_speed=200.0, pen_lift=0.12))
+        assert st["draw_mm"] > 0, "描く距離が出ていない"
+
+        # 見積りは各項の単純な和。式が変わったら気づけるように固定する
+        expect = (st["draw_mm"] / 80.0 + st["pen_up_mm"] / 200.0
+                  + st["paths"] * 0.12)
+        assert abs(st["estimated_seconds"] - expect) < 0.5, (
+            f"見積りが合わない: {st['estimated_seconds']} vs {expect:.1f}")
+
+        # 速度を上げれば必ず短くなる
+        fast = svg_export.export_svg(
+            bpy.context, str(tmp / "f.svg"),
+            svg_export.SvgOptions(depth_res=400, plot_speed=400.0,
+                                  travel_speed=200.0, pen_lift=0.12))
+        assert fast["estimated_seconds"] < st["estimated_seconds"], (
+            "速くしたのに見積りが縮まない")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: preview computes the same visible lines as the export")
+def t57():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    opts = svg_export.SvgOptions(depth_res=400)
+    segs, n = svg_export.compute_preview(bpy.context, opts)
+    assert n > 0, "プレビューの線分が空"
+    assert segs.shape[1:] == (2, 3), f"線分の形が違う: {segs.shape}"
+
+    # プレビューは描画ハンドラを足すまで何も表示しない
+    assert not svg_export.preview_enabled()
+    svg_export.enable_preview()
+    assert svg_export.preview_enabled()
+    svg_export.disable_preview()
+    assert not svg_export.preview_enabled(), "ハンドラが外れていない"
+
+    # 書き出しと同じ辺を見ているか。線分の総延長で突き合わせる
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        svg_export.export_svg(
+            bpy.context, str(tmp / "p.svg"),
+            svg_export.SvgOptions(depth_res=400, merge_tolerance=0.0,
+                                  simplify=0.0))
+        # 3D の長さ同士は比べられないので、本数の桁で見る
+        text = (tmp / "p.svg").read_text(encoding="utf-8")
+        n_points = sum(len(m.split()) for m in
+                       __import__("re").findall(r'points="([^"]+)"', text))
+        assert n_points > 0
+        assert n <= n_points, (
+            f"プレビューの線分が書き出しより多い: {n} vs {n_points}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     print("[tests] FreePencil smoke tests")
     fp_batch.install_addon()

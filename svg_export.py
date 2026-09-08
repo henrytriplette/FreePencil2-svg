@@ -85,13 +85,19 @@ class SvgOptions:
     __slots__ = ("page", "margin", "pen", "merge_tolerance", "simplify",
                  "samples", "bias", "neighbourhood", "depth_res",
                  "sort", "keep_hidden", "seed", "sources", "respect_paint",
-                 "layers", "outline_layer", "outline_gap")
+                 "layers", "outline_layer", "outline_gap",
+                 "fit", "plot_speed", "travel_speed", "pen_lift")
 
     def __init__(self, page="A4", margin=10.0, pen=0.3, merge_tolerance=0.1,
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
                  depth_res=1600, sort=True, keep_hidden=False, seed=42,
                  sources=None, respect_paint=True, layers="NONE",
-                 outline_layer=True, outline_gap=0.02):
+                 outline_layer=True, outline_gap=0.02, fit="CAMERA",
+                 plot_speed=80.0, travel_speed=200.0, pen_lift=0.12):
+        self.fit = fit
+        self.plot_speed = plot_speed
+        self.travel_speed = travel_speed
+        self.pen_lift = pen_lift
         self.layers = layers
         self.outline_layer = outline_layer
         self.outline_gap = outline_gap
@@ -137,6 +143,10 @@ class SvgOptions:
             layers=g(scene, "fp_svg_layers", "NONE"),
             outline_layer=g(scene, "fp_svg_outline_layer", True),
             outline_gap=g(scene, "fp_svg_outline_gap", 0.02),
+            fit=g(scene, "fp_svg_fit", "CAMERA"),
+            plot_speed=g(scene, "fp_svg_plot_speed", 80.0),
+            travel_speed=g(scene, "fp_svg_travel_speed", 200.0),
+            pen_lift=g(scene, "fp_svg_pen_lift", 0.12),
         )
 
 
@@ -876,6 +886,55 @@ def _layer_order(names) -> list:
     return known + rest
 
 
+def _page_transform(groups, page_w: float, page_h: float,
+                    width: int, height: int, opts: SvgOptions) -> tuple:
+    """ピクセル座標 -> 紙(mm)の拡大率と原点。
+
+    CAMERA … カメラのフレームを紙に合わせる。構図がそのまま出る代わり、
+             被写体が小さく写っていれば紙の上でも小さいままになる
+    DRAWING… 実際に描かれた範囲を紙いっぱいに合わせる。余白が一定になり、
+             結合の許容量(mm)も絵に対して素直に効く
+    """
+    if opts.fit == "DRAWING":
+        pts = [pl for v in groups.values() for pl in v]
+        if pts:
+            allp = np.concatenate(pts)
+            lo, hi = allp.min(axis=0), allp.max(axis=0)
+            span = np.maximum(hi - lo, 1e-9)
+            scale = min((page_w - 2 * opts.margin) / span[0],
+                        (page_h - 2 * opts.margin) / span[1])
+            off_x = (page_w - span[0] * scale) * 0.5 - lo[0] * scale
+            off_y = (page_h - span[1] * scale) * 0.5 - lo[1] * scale
+            return scale, off_x, off_y
+
+    scale = min((page_w - 2 * opts.margin) / width,
+                (page_h - 2 * opts.margin) / height)
+    return scale, (page_w - width * scale) * 0.5, \
+        (page_h - height * scale) * 0.5
+
+
+def drawn_length(lines) -> float:
+    """ペンを下ろして描く距離の合計(mm)。"""
+    total = 0.0
+    for ln in lines:
+        if len(ln) > 1:
+            total += float(np.hypot(*(ln[1:] - ln[:-1]).T).sum())
+    return total
+
+
+def estimate_seconds(draw_mm: float, pen_up_mm: float, paths: int,
+                     opts: SvgOptions) -> float:
+    """プロット時間のざっくり見積り。
+
+    描く距離と移動距離をそれぞれの速度で割り、ペンの上げ下ろし1回ぶんの
+    固定費を本数だけ足す。機種ごとの加減速は見ていないので目安。
+    """
+    draw_speed = max(opts.plot_speed, 1e-6)
+    move_speed = max(opts.travel_speed, 1e-6)
+    return (draw_mm / draw_speed + pen_up_mm / move_speed
+            + paths * opts.pen_lift)
+
+
 def build_svg(groups, width: int, height: int, opts: SvgOptions) -> tuple:
     """レイヤーごとの折れ線を mm に移し、SVG 文字列と統計を返す。
 
@@ -886,10 +945,8 @@ def build_svg(groups, width: int, height: int, opts: SvgOptions) -> tuple:
         groups = {"lines": groups}
 
     page_w, page_h = page_mm(opts.page, width, height)
-    scale = min((page_w - 2 * opts.margin) / width,
-                (page_h - 2 * opts.margin) / height)
-    off_x = (page_w - width * scale) * 0.5
-    off_y = (page_h - height * scale) * 0.5
+    scale, off_x, off_y = _page_transform(groups, page_w, page_h,
+                                          width, height, opts)
 
     raw_total = sum(len(v) for v in groups.values())
     stats = {"paths_raw": raw_total, "layers": {}}
@@ -898,6 +955,7 @@ def build_svg(groups, width: int, height: int, opts: SvgOptions) -> tuple:
     points = 0
     paths = 0
     pen_up = 0.0
+    draw_mm = 0.0
     merged_total = 0
 
     for i, name in enumerate(_layer_order(groups.keys()), start=1):
@@ -916,6 +974,7 @@ def build_svg(groups, width: int, height: int, opts: SvgOptions) -> tuple:
         if opts.sort:
             lines = linesort(lines)
         pen_up += pen_up_travel(lines)
+        draw_mm += drawn_length(lines)
 
         rows = []
         for mm in lines:
@@ -948,7 +1007,10 @@ def build_svg(groups, width: int, height: int, opts: SvgOptions) -> tuple:
     )
     stats.update({"page_mm": [page_w, page_h], "paths": paths,
                   "paths_merged": merged_total, "points": points,
-                  "pen_up_mm": round(pen_up, 1)})
+                  "pen_up_mm": round(pen_up, 1),
+                  "draw_mm": round(draw_mm, 1),
+                  "estimated_seconds": round(
+                      estimate_seconds(draw_mm, pen_up, paths, opts), 1)})
     return svg, stats
 
 
@@ -1045,8 +1107,172 @@ class FP_OT_EXPORT_SVG(bpy.types.Operator):
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
 
-        msg = (f"{stats['paths']} paths, {stats['points']} points, "
-               f"pen-up {stats['pen_up_mm']:.0f} mm -> {path.name}")
+        mins = stats["estimated_seconds"] / 60.0
+        summary = (
+            f"{stats['paths']} paths, {stats['points']} points"
+            f"|draw {stats['draw_mm']:.0f} mm, "
+            f"travel {stats['pen_up_mm']:.0f} mm"
+            f"|approx {mins:.1f} min at {opts.plot_speed:.0f} mm/s")
+        context.scene.fp_svg_last_result = summary
+
+        msg = summary.replace("|", "; ") + f" -> {path.name}"
         logger.info(msg)
         self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+
+# ------------------------------------------------------ ビューポート表示
+# 書き出す前に線を見られるようにする。SVG を開き直さないと結果が分からない
+# のが一番の手間だったので、3Dビューに直接引く。投影する前の3D線分をその
+# まま描くだけなので、線の作り方はここに重複しない。
+#
+# 隠線処理はレンダーカメラから見て計算しているため、正しく見えるのは
+# カメラビューのときだけ。回すと隠れ方は合わなくなる(線の位置は合う)。
+_preview_segments = None      # (N, 2, 3) のワールド座標
+_preview_handle = None
+_preview_info = ""
+
+
+def compute_preview(context, opts: SvgOptions = None) -> tuple:
+    """見えている線を3D線分として返す。書き出しと同じ経路を通る。"""
+    scene = context.scene
+    cam = scene.camera
+    if cam is None:
+        raise RuntimeError("No active camera in the scene")
+    if opts is None:
+        opts = SvgOptions.from_scene(scene)
+
+    objs = target_objects(context)
+    if not objs:
+        raise RuntimeError("No mesh objects to preview")
+
+    width = max(16, int(opts.depth_res))
+    height = max(16, int(round(width * scene.render.resolution_y
+                               / max(1, scene.render.resolution_x))))
+
+    depth = render_depth_pass(scene, cam, width, height)
+    depsgraph = context.evaluated_depsgraph_get()
+    project = Projection(cam, depsgraph, width, height)
+
+    collected = extract_lines(objs, depsgraph, cam, opts)
+    if not collected:
+        raise RuntimeError("No lines found. Run STEP0 or STEP1 first")
+
+    mode, _ = choose_depth_mode(
+        depth, project,
+        np.concatenate([d["centers"] for d in collected]), opts.seed)
+
+    segs = []
+    for data in collected:
+        verts, edges = data["verts"], data["edges"]
+        full, pieces = visible_spans(data, project, depth, opts, mode)
+        if full.any():
+            e = edges[full]
+            segs.append(np.stack([verts[e[:, 0]], verts[e[:, 1]]], axis=1))
+        if pieces:
+            segs.append(np.asarray([[a, b] for _, a, b in pieces]))
+
+    if not segs:
+        return np.zeros((0, 2, 3)), 0
+    out = np.concatenate(segs).astype(np.float32)
+    return out, len(out)
+
+
+def _draw_preview():
+    """3Dビューのコールバック。POST_VIEW で線分をそのまま引く。"""
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+
+    if _preview_segments is None or len(_preview_segments) == 0:
+        return
+    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+    batch = batch_for_shader(
+        shader, 'LINES',
+        {"pos": _preview_segments.reshape(-1, 3)})
+    gpu.state.line_width_set(1.5)
+    gpu.state.depth_test_set('NONE')
+    gpu.state.blend_set('ALPHA')
+    shader.bind()
+    shader.uniform_float("color", (0.05, 0.05, 0.05, 0.9))
+    batch.draw(shader)
+    gpu.state.blend_set('NONE')
+    gpu.state.line_width_set(1.0)
+
+
+def preview_enabled() -> bool:
+    return _preview_handle is not None
+
+
+def enable_preview() -> None:
+    global _preview_handle
+    if _preview_handle is None:
+        _preview_handle = bpy.types.SpaceView3D.draw_handler_add(
+            _draw_preview, (), 'WINDOW', 'POST_VIEW')
+
+
+def disable_preview() -> None:
+    """ハンドラを外す。アドオンの unregister からも呼ぶこと。"""
+    global _preview_handle, _preview_segments
+    if _preview_handle is not None:
+        bpy.types.SpaceView3D.draw_handler_remove(_preview_handle, 'WINDOW')
+        _preview_handle = None
+    _preview_segments = None
+
+
+def refresh_preview(context) -> str:
+    """線を計算し直して覚える。戻り値は表示用の一行。"""
+    global _preview_segments, _preview_info
+    segs, n = compute_preview(context)
+    _preview_segments = segs
+    _preview_info = f"{n} segments"
+    for area in getattr(context.screen, "areas", ()):
+        if area.type == 'VIEW_3D':
+            area.tag_redraw()
+    return _preview_info
+
+
+def preview_info() -> str:
+    return _preview_info
+
+
+class FP_OT_SVG_PREVIEW(bpy.types.Operator):
+    """Compute the vector lines and show them in the viewport."""
+
+    bl_idname = "freepencil.svg_preview"
+    bl_label = "Refresh preview"
+    bl_description = ("Work out the lines that would be exported and draw "
+                      "them in the 3D view. Look through the camera: hidden "
+                      "line removal is computed for the render camera")
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.camera is not None
+
+    def execute(self, context):
+        try:
+            info = refresh_preview(context)
+        except RuntimeError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        enable_preview()
+        context.scene.fp_svg_preview = True
+        self.report({'INFO'}, f"Preview: {info}")
+        return {'FINISHED'}
+
+
+class FP_OT_SVG_PREVIEW_CLEAR(bpy.types.Operator):
+    """Stop drawing the preview."""
+
+    bl_idname = "freepencil.svg_preview_clear"
+    bl_label = "Clear preview"
+    bl_description = "Remove the preview lines from the 3D view"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        disable_preview()
+        context.scene.fp_svg_preview = False
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                area.tag_redraw()
         return {'FINISHED'}

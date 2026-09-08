@@ -162,6 +162,14 @@ def register():
     #        module.register()
 
 def unregister():
+    # 3Dビューの描画ハンドラはクラス登録とは別に生きているので、
+    # ここで確実に外す(サブモジュールの unregister は呼んでいないため)
+    try:
+        from . import svg_export
+        svg_export.disable_preview()
+    except Exception:
+        logger.exception("Failed to remove the SVG preview handler")
+
     logger.info("Unregistering translations for FreePencil2...")
     try:
         bpy.app.translations.unregister(__name__)
