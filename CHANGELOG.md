@@ -1,6 +1,6 @@
 # FreePencil2 - Changelog
 
-## [Unreleased]
+## [2.8.0] - 2026-09-09
 ### Added
 - **SVG export for pen plotters, as the add-on's primary output.** A new
   sidebar section (`SVG Export (pen plotter)`, shown first) writes the
