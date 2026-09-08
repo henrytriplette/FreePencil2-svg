@@ -17,6 +17,7 @@ from .paint_vertex_color import LINK_MAKE_FP_OT_VCOLOR
 from .half_fill import LINK_MAKE_FP_OT_HALF_FILL
 from .render_cameras import FP_OT_RENDER_CAMERAS
 from .auto_setup import FP_OT_AUTO_SETUP
+from .svg_export import FP_OT_EXPORT_SVG, VCOL_LAYER_MECHA
 
 
 class FP_PT_Line(bpy.types.Panel):
@@ -55,6 +56,63 @@ class _FPSub:
     # DEFAULT_CLOSED が効くのは初回表示時だけで、以降はユーザーの
     # 開閉状態が .blend 側に保存される。
     bl_options = {"DEFAULT_CLOSED"}
+
+
+def _painted_mesh_exists(context, cap: int = 200) -> bool:
+    """mecha_color を持つメッシュがあるか。パネル描画は毎フレーム走るので
+    見つかった時点で切り上げ、無いときも cap 個で打ち切る。"""
+    for i, obj in enumerate(context.view_layer.objects):
+        if i >= cap:
+            break
+        if obj.type == "MESH" and obj.data.color_attributes.get(
+                VCOL_LAYER_MECHA) is not None:
+            return True
+    return False
+
+
+class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
+    """本命の出口。塗り分けの境界をベクタのまま SVG にする。
+
+    ラスタのコンポジタ経路(STEP2/3)は残してあるが、こちらはそれを通らない。
+    Sobel の線は幅を持つ帯なので、追跡するとプロッタが輪郭を二重になぞる。
+    """
+
+    bl_label = "SVG Export (pen plotter)"
+    bl_idname = "FREEPENCIL_PT_SVG"
+    bl_order = -1
+    bl_options = set()      # 主機能なので既定で開く
+
+    def draw(self, context):
+        t = bpy.app.translations.pgettext
+        layout = self.layout
+        scene = context.scene
+
+        if scene.camera is None:
+            layout.label(text=t("Set an active camera first"), icon="ERROR")
+        elif not _painted_mesh_exists(context):
+            layout.label(text=t("Run STEP0 or STEP1 first"), icon="INFO")
+
+        col = layout.column(align=True)
+        col.prop(scene, "fp_svg_page", text=t("Page"))
+        col.prop(scene, "fp_svg_margin", text=t("Margin (mm)"))
+        col.prop(scene, "fp_svg_pen", text=t("Pen width (mm)"))
+
+        col = layout.column(align=True)
+        col.prop(scene, "fp_svg_merge_tolerance", text=t("Merge (mm)"))
+        col.prop(scene, "fp_svg_simplify", text=t("Simplify (mm)"))
+        col.prop(scene, "fp_svg_sort", text=t("Sort draw order"))
+
+        box = layout.box()
+        box.label(text=t("Hidden line removal"))
+        col = box.column(align=True)
+        col.prop(scene, "fp_svg_depth_res", text=t("Depth resolution"))
+        col.prop(scene, "fp_svg_samples", text=t("Samples per edge"))
+        col.prop(scene, "fp_svg_bias", text=t("Depth bias"))
+        col.prop(scene, "fp_svg_neighbourhood", text=t("Neighbourhood"))
+        col.prop(scene, "fp_svg_keep_hidden", text=t("Keep hidden lines"))
+
+        layout.operator(FP_OT_EXPORT_SVG.bl_idname,
+                        text=t("Export SVG"), icon="EXPORT")
 
 
 class FP_PT_Step0(_FPSub, bpy.types.Panel):

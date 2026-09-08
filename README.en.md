@@ -2,12 +2,15 @@
 
 [日本語](README.md) | **English**
 
-A Blender add-on that automatically generates line art from 3D models.
+A Blender add-on that automatically generates line art from 3D models. Lines
+come out as **vectors (SVG)** or as raster (a rendered image via the compositor).
+
+**Its main use is SVG export for pen plotters.**
 
 It automatically paints the model with vertex colors and extracts the color
-boundaries as lines by running edge detection in the compositor (the so-called
-"color-separation" method). Because the principle is simple, it is fast: even a
-1.28-million-polygon model is processed in just under 30 seconds.
+boundaries as lines (the so-called "color-separation" method). Because the
+principle is simple, it is fast: even a 1.28-million-polygon model is processed
+in just under 30 seconds.
 
 The hard part of the color-separation method has always been the preprocessing —
 *how* to separate the colors. FreePencil2 automates exactly that.
@@ -22,6 +25,43 @@ A single press of "Fully automatic setup" in STEP0 completes everything from the
 color separation to building the compositor nodes. Anywhere you don't like the
 automatic result, you can touch it up with vertex painting in STEP4 (redraw the
 color separation / add lines / remove lines).
+
+## SVG export (pen plotter)
+
+Export from **SVG Export (pen plotter)**, the first section of the sidebar.
+Run it after the color separation is done (STEP0 or STEP1).
+
+It does not trace the rendered image. The vectors come from the definition of
+a line itself — an edge whose two adjacent faces differ in color. The
+compositor's Sobel draws a band with width, so tracing it makes a plotter go
+around each line twice as an outline. Emitting the edge itself always gives a
+single centreline.
+
+- Hidden-line removal compares against the Z pass; only what is in front survives
+- Line ends are joined and the draw order is optimised before writing
+- Millimetres, no fill, constant stroke width (stroke width = pen width)
+
+Measured (a 1,047,642-face CAD model, A4 landscape, 1600 px):
+
+| stage | paths | pen-up travel |
+|---|---|---|
+| chains split at junctions | 26927 | 183948 mm |
+| line ends joined (0.1 mm default) | 3286 | — |
+| draw order sorted | 3286 | 2997 mm |
+
+About 5 seconds for the whole export (excluding the color separation).
+
+**Set the merge tolerance from the pen width, not from how small the drawing
+is.** If the drawing is small on the page, unrelated ends fall inside the
+tolerance and only the path count goes down.
+
+For `reloop`, `layout` or HPGL output, run the result through vpype. vpype is
+not bundled: it requires Shapely and scipy, which cannot be reconciled with
+shipping one package for 4.2 through 5.2.
+
+```bash
+vpype read out.svg reloop linesort write plot.svg
+```
 
 ### Measured processing times
 

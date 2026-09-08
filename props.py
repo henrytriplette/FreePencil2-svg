@@ -432,6 +432,74 @@ def register_props():
             min=0.0,
             max=1.0,
             default=(1.0, 0.0, 0.0, 1.0)
+        ),
+
+        # --- SVG 書き出し(ペンプロッタ) --------------------------------
+        # 既定値は実機モデル(104万面のCAD)で詰めたもの。詳しくは
+        # svg_export.py と dev/note_assets/README.md を見ること。
+        "fp_svg_page": EnumProperty(
+            name="Page",
+            description="Paper size. Orientation follows the render aspect",
+            items=[('A5', "A5", "148 x 210 mm"),
+                   ('A4', "A4", "210 x 297 mm"),
+                   ('A3', "A3", "297 x 420 mm"),
+                   ('LETTER', "Letter", "215.9 x 279.4 mm")],
+            default='A4'
+        ),
+        "fp_svg_margin": FloatProperty(
+            name="Margin",
+            description="Page margin in millimetres",
+            default=10.0, min=0.0, max=100.0
+        ),
+        "fp_svg_pen": FloatProperty(
+            name="Pen width",
+            description="Stroke width in millimetres. Match your pen",
+            default=0.3, min=0.01, max=5.0
+        ),
+        "fp_svg_merge_tolerance": FloatProperty(
+            name="Merge tolerance",
+            description=("Join line ends closer than this (mm). Set it from "
+                         "the pen width, not from how small the drawing is"),
+            default=0.1, min=0.0, max=5.0
+        ),
+        "fp_svg_simplify": FloatProperty(
+            name="Simplify",
+            description="Drop points that move the line less than this (mm)",
+            default=0.05, min=0.0, max=5.0
+        ),
+        "fp_svg_sort": BoolProperty(
+            name="Sort draw order",
+            description="Reorder paths to shorten pen-up travel",
+            default=True
+        ),
+        "fp_svg_depth_res": IntProperty(
+            name="Depth resolution",
+            description=("Width of the depth pass used for hidden-line "
+                         "removal. Line accuracy follows this"),
+            default=1600, min=256, max=8192
+        ),
+        "fp_svg_samples": IntProperty(
+            name="Samples per edge",
+            description="Visibility test points along each edge",
+            default=8, min=1, max=64
+        ),
+        "fp_svg_bias": FloatProperty(
+            name="Depth bias",
+            description=("Relative tolerance when comparing depth. Lines sit "
+                         "on the surface, so some bias is required"),
+            default=0.001, min=0.0, max=0.1, precision=4
+        ),
+        "fp_svg_neighbourhood": IntProperty(
+            name="Depth neighbourhood",
+            description=("Radius in pixels for the depth lookup. Above 0 the "
+                         "maximum is taken, which lets the interior of "
+                         "detailed models show through the outer panels"),
+            default=0, min=0, max=4
+        ),
+        "fp_svg_keep_hidden": BoolProperty(
+            name="Keep hidden lines",
+            description="Skip hidden-line removal (for diagnosis)",
+            default=False
         )
     }
 
@@ -476,7 +544,11 @@ def unregister_props():
         "fp_use_random_seed", "fp_color_seed",
         "fp_bone_grouping_mode", "fp_bone_hard_names", "fp_part_tint",
         "fp_node_type",
-        "fp_half_color"
+        "fp_half_color",
+        "fp_svg_page", "fp_svg_margin", "fp_svg_pen",
+        "fp_svg_merge_tolerance", "fp_svg_simplify", "fp_svg_sort",
+        "fp_svg_depth_res", "fp_svg_samples", "fp_svg_bias",
+        "fp_svg_neighbourhood", "fp_svg_keep_hidden"
     ]
     
     for prop_name in props_to_clear:

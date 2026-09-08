@@ -57,10 +57,12 @@ blender -b --factory-startup --python time_step0.py -- --blend <asset.blend> --n
 STEP0 を押してから終わるまでの実時間。記事に載せる「処理時間」はこれ。
 STEP1 単体の時間ではない。
 
-## SVG 書き出し（試作）
+## SVG 書き出し
 
-ペンプロッタ向けに、塗り分けの境界をベクタのまま取り出す。レンダー画像は
-使わない（Sobel の線は幅を持つ帯なので、追跡すると輪郭を二重になぞる）。
+線を作るコアは本体の `svg_export.py` にある。このスクリプトはアセットの
+下ごしらえ（読み込み・正規化・地面板の除去・デモシーン）だけを持ち、
+書き出し自体はコアを呼ぶ。**バッチとUIが同一コードパス**なので、片方だけ
+直して線がずれることがない。
 
 ```bat
 blender -b --factory-startup --python export_svg_lines.py -- --demo
@@ -69,10 +71,6 @@ blender -b --factory-startup --python export_svg_lines.py -- ^
 ```
 
 `out\<name>_lines.svg` が出る。mm 単位・塗りなし・一定線幅。
-プロッタに要る後処理(端点の結合・間引き・描画順)はこの中で完結する。
-vpype は入れていない: 本体が Shapely と scipy(どちらもコンパイル済み
-ホイール)を要求するので、4.2〜5.2 を1パッケージで配る方針と両立しない。
-必要なのは linemerge と linesort 相当だけで、どちらも numpy で足りる。
 
 実測(KD250、104万面、1600px、A4横):
 
@@ -87,18 +85,11 @@ vpype は入れていない: 本体が Shapely と scipy(どちらもコンパ�
 消す前、絵が 37mm 幅だったときは 685 本まで落ちていたが、0.44mm 相当の
 過剰な結合だった。同じ倍率を今の絵に当てると 982 本になる)。
 
-絵は変わらない(ラスタ化して比較し、差分は 0.025%=間引きの誤差のみ)。
-`--merge-tolerance 0` で結合、`--no-sort` で並べ替えを止められる。
-
-reloop・layout・HPGL 出力が要るときだけ外から vpype を通す。
-
-```bat
-vpype read out\demo_lines.svg reloop linesort write plot.svg
-```
-
 切り分け用のスイッチ。
 
 - `--keep-hidden` … 隠線処理を飛ばす（消えすぎ／消えなさすぎの判定）
+- `--no-occluder` … `--demo` の手前の箱を置かない。消えた線はすべて
+  自己遮蔽が原因になるので、`--bias` の詰めはこの状態で見る
 - `--keep-ground` … 地面板の自動除去をしない。既定では「平ら、かつ
   本体より大きい」板を落とす（KD250 では `Plane` 1面が本体の4.5倍あり、
   カメラのフィットが引っ張られて本体が豆粒になっていた）。落としたものは
@@ -107,12 +98,16 @@ vpype read out\demo_lines.svg reloop linesort write plot.svg
 - `--neighbourhood` … 深度参照の近傍半径。1以上は近傍の最大値を採るので
   緩い。CAD 由来の密なモデルでは中身が外板を透ける（104万面で実測:
   61553→32835本に減り、内部の機械が消えた）。既定は 0
-- `--no-occluder` … `--demo` の手前の箱を置かない。消えた線はすべて
-  自己遮蔽が原因になるので、`--bias` の詰めはこの状態で見る
 
 Z パスが「平面距離」か「光線距離」かは実測で決めている（面の中心を投影して
 深度バッファと突き合わせ、一致した本数が多いほうを採る）。推測で書かないこと。
 出力の `depth_mode_hits` がその内訳。
+
+reloop・layout・HPGL 出力が要るときだけ外から vpype を通す。
+
+```bat
+vpype read out\demo_lines.svg reloop linesort write plot.svg
+```
 
 ## 改変チェック
 

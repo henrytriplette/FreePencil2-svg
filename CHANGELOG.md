@@ -1,5 +1,40 @@
 # FreePencil2 - Changelog
 
+## [Unreleased]
+### Added
+- **SVG export for pen plotters, as the add-on's primary output.** A new
+  sidebar section (`SVG Export (pen plotter)`, shown first) writes the
+  color-separation boundaries as vector paths instead of a rendered image.
+
+  The rendered image is not traced. Lines come from the definition itself -
+  an edge whose two adjacent faces differ in `mecha_color`, plus open
+  boundaries and camera silhouettes. The compositor's Sobel draws a band
+  with width, so tracing it makes a plotter go around every line twice as
+  an outline; emitting the edge gives a single centreline.
+
+  - Hidden-line removal compares each edge against the Z pass. Whether that
+    pass holds plane distance or ray length is decided by measurement (face
+    centres are projected and matched against the buffer), not assumed.
+  - The depth render runs in a throwaway scene, so an existing compositor
+    tree is left untouched.
+  - `linemerge` / `linesort` equivalents are implemented in numpy. vpype
+    itself is not bundled: it requires Shapely and scipy, both compiled
+    wheels, which cannot be reconciled with shipping one package for
+    4.2 through 5.2.
+
+  Measured on a 1,047,642-face CAD model (A4 landscape, 1600 px): 26927
+  chains -> 3286 paths after merging, pen-up travel 183948 mm -> 2997 mm,
+  about 5 seconds for the export.
+
+  Edge extraction reuses `mesh_islands.MeshTopology`, so the vector line set
+  cannot drift from what the raster pipeline draws. The core lives in
+  `svg_export.py` and the dev harness calls the same functions, following
+  the same split as `fp_core.py`.
+
+### Notes
+- The raster pipeline (STEP0-STEP5) is unchanged and remains fully
+  available; only the panel order puts SVG export first.
+
 ## [2.7.0] - 2026-08-23
 ### Changed
 - **Line sensitivity now defaults to 0.5 (was 1.0), and STEP0 sets it.**
