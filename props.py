@@ -496,6 +496,42 @@ def register_props():
                          "detailed models show through the outer panels"),
             default=0, min=0, max=4
         ),
+        # 線の出どころ。ラスタ経路の fp_ch_* に対応する。bone だけ既定で
+        # 切ってある(fp_ch_bone は 1.0 だが、ボーン境界はプロッタでは
+        # 線が増えすぎるので、要る人だけ入れる)
+        "fp_svg_src_mecha": BoolProperty(
+            name="Color separation",
+            description="Edges where the mecha_color differs",
+            default=True
+        ),
+        "fp_svg_src_material": BoolProperty(
+            name="Material boundaries",
+            description="Edges between different materials",
+            default=True
+        ),
+        "fp_svg_src_bone": BoolProperty(
+            name="Bone boundaries",
+            description=("Edges where the bone_color differs. Off by "
+                         "default: it adds a lot of lines for a plotter"),
+            default=False
+        ),
+        "fp_svg_src_open": BoolProperty(
+            name="Open edges",
+            description=("Edges without exactly two faces. Imported CAD "
+                         "with unwelded shells produces many of these"),
+            default=True
+        ),
+        "fp_svg_src_silhouette": BoolProperty(
+            name="Silhouette",
+            description="Edges where the surface turns away from the camera",
+            default=True
+        ),
+        "fp_svg_respect_paint": BoolProperty(
+            name="Honour STEP4 paint",
+            description=("Drop lines erased with mask_color or made "
+                         "invisible with line_color"),
+            default=True
+        ),
         "fp_svg_keep_hidden": BoolProperty(
             name="Keep hidden lines",
             description="Skip hidden-line removal (for diagnosis)",
@@ -548,7 +584,9 @@ def unregister_props():
         "fp_svg_page", "fp_svg_margin", "fp_svg_pen",
         "fp_svg_merge_tolerance", "fp_svg_simplify", "fp_svg_sort",
         "fp_svg_depth_res", "fp_svg_samples", "fp_svg_bias",
-        "fp_svg_neighbourhood", "fp_svg_keep_hidden"
+        "fp_svg_neighbourhood", "fp_svg_keep_hidden",
+        "fp_svg_src_mecha", "fp_svg_src_material", "fp_svg_src_bone",
+        "fp_svg_src_open", "fp_svg_src_silhouette", "fp_svg_respect_paint"
     ]
     
     for prop_name in props_to_clear:

@@ -78,6 +78,11 @@ def parse_args() -> argparse.Namespace:
                    help="地面板の自動除去をしない")
     p.add_argument("--exclude", default="",
                    help="この正規表現に名前が一致するメッシュを除く")
+    p.add_argument("--sources", default="",
+                   help="線の出どころをカンマ区切りで指定(既定は bone 以外)。"
+                        "例: mecha,material,silhouette")
+    p.add_argument("--ignore-paint", action="store_true",
+                   help="STEP4 の mask_color / line_color を無視する")
     return p.parse_args(argv)
 
 
@@ -187,7 +192,16 @@ def main() -> None:
 
     from freepencil2 import svg_export
 
+    sources = None
+    if args.sources:
+        wanted = {w.strip() for w in args.sources.split(",") if w.strip()}
+        unknown = wanted - set(svg_export.LINE_SOURCES)
+        if unknown:
+            raise SystemExit(f"知らない出どころ: {sorted(unknown)}")
+        sources = {s: (s in wanted) for s in svg_export.LINE_SOURCES}
+
     opts = svg_export.SvgOptions(
+        sources=sources, respect_paint=not args.ignore_paint,
         page=args.page, margin=args.margin, pen=args.pen,
         merge_tolerance=args.merge_tolerance, simplify=args.simplify,
         samples=args.samples, bias=args.bias,

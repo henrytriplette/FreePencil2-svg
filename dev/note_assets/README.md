@@ -85,6 +85,20 @@ blender -b --factory-startup --python export_svg_lines.py -- ^
 消す前、絵が 37mm 幅だったときは 685 本まで落ちていたが、0.44mm 相当の
 過剰な結合だった。同じ倍率を今の絵に当てると 982 本になる)。
 
+線の出どころは `--sources` で選ぶ（既定は bone 以外すべて）。
+
+```bat
+blender -b --factory-startup --python export_svg_lines.py -- ^
+  --blend <asset.blend> --name mecha --sources mecha,material,silhouette
+```
+
+`--ignore-paint` で STEP4 の `mask_color` / `line_color` を無視できる。
+
+出力の `edges_by_source` は出どころ別の本数だが、**重なりがあるので合計は
+`edges_line` より多くなる**（1本の辺が塗り分け境界かつ外形線であることは
+普通にある）。評価用アセットは `apply_white_material` で単一マテリアルに
+されるので、`material` はこのパイプラインでは 0 になる。
+
 切り分け用のスイッチ。
 
 - `--keep-hidden` … 隠線処理を飛ばす（消えすぎ／消えなさすぎの判定）

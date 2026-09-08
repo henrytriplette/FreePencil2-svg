@@ -40,6 +40,27 @@ single centreline.
 - Hidden-line removal compares against the Z pass; only what is in front survives
 - Line ends are joined and the draw order is optimised before writing
 - Millimetres, no fill, constant stroke width (stroke width = pen width)
+- STEP4 paint is honoured: lines erased with `mask_color`, or made invisible
+  with `line_color`, do not reach the SVG either
+
+### Line sources
+
+Each source can be switched on or off independently.
+
+| source | default | what it is |
+|---|---|---|
+| Color separation | ON | edges where the adjacent faces' `mecha_color` differs |
+| Material boundaries | ON | edges where the material changes |
+| Bone boundaries | **OFF** | edges where `bone_color` differs; adds many lines |
+| Open edges | ON | edges without exactly two faces |
+| Silhouette | ON | edges where the surface turns away from the camera |
+
+**Open edges** are abundant in imported CAD with unwelded shells: 255,985 of
+683,165 edges (37%) on the measured model. Switching them off cuts the count.
+
+**Bone boundaries** are the one source whose default differs from the raster
+path (`fp_ch_bone` defaults to 1.0). On a plotter they add too many lines, so
+turn them on only if you want them.
 
 Measured (a 1,047,642-face CAD model, A4 landscape, 1600 px):
 

@@ -32,7 +32,19 @@ from . import mesh_islands
 logger = logging.getLogger(__name__)
 
 VCOL_LAYER_MECHA = "mecha_color"
+VCOL_LAYER_MASK = "mask_color"
+VCOL_LAYER_LINE = "line_color"
+VCOL_LAYER_BONE = "bone_color"
+
 BACKGROUND_Z = 1e9          # Z パスの背景。EEVEE は 1e10 を書く
+
+# STEP4 の塗りをどこで「塗った」と見なすか。mask_color は「明るさは問わない」
+# 仕様なので最大チャンネル、line_color は「白で見えなくなる」ので最小
+# チャンネルを見る。中間はプロッタでは表現できないので 0.5 で二値化する
+PAINT_THRESHOLD = 0.5
+
+# 線の出どころ。ラスタ経路の fp_ch_* に対応する
+LINE_SOURCES = ("mecha", "material", "bone", "open", "silhouette")
 
 # 用紙(mm)。長辺・短辺の順で持ち、向きは絵の縦横比から決める
 PAGE_SIZES = {
@@ -48,11 +60,19 @@ class SvgOptions:
 
     __slots__ = ("page", "margin", "pen", "merge_tolerance", "simplify",
                  "samples", "bias", "neighbourhood", "depth_res",
-                 "sort", "keep_hidden", "seed")
+                 "sort", "keep_hidden", "seed", "sources", "respect_paint")
 
     def __init__(self, page="A4", margin=10.0, pen=0.3, merge_tolerance=0.1,
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
-                 depth_res=1600, sort=True, keep_hidden=False, seed=42):
+                 depth_res=1600, sort=True, keep_hidden=False, seed=42,
+                 sources=None, respect_paint=True):
+        # bone だけ既定で切ってある。ラスタ経路の fp_ch_bone は 1.0 だが、
+        # ボーン境界はプロッタでは線が増えすぎるので出どころとしては任意
+        self.sources = dict(mecha=True, material=True, bone=False,
+                            open=True, silhouette=True)
+        if sources:
+            self.sources.update(sources)
+        self.respect_paint = respect_paint
         self.page = page
         self.margin = margin
         self.pen = pen
@@ -82,6 +102,9 @@ class SvgOptions:
             sort=g(scene, "fp_svg_sort", True),
             keep_hidden=g(scene, "fp_svg_keep_hidden", False),
             seed=g(scene, "fp_color_seed", 42),
+            sources={s: bool(g(scene, f"fp_svg_src_{s}", s != "bone"))
+                     for s in LINE_SOURCES},
+            respect_paint=g(scene, "fp_svg_respect_paint", True),
         )
 
 
@@ -102,22 +125,26 @@ def target_objects(context, selected_only: bool = False) -> list:
 
 
 # ---------------------------------------------------------------- 抽出
-def face_color_keys(mesh):
-    """面ごとの mecha_color を比較用の整数キーにする。
-
-    色は面単位で決まり、utils.apply_face_colors が角へ展開している。
-    なので面の先頭ループを1つ読めば足りる。
-    """
-    attr = mesh.color_attributes.get(VCOL_LAYER_MECHA)
-    if attr is None:
-        return None
+def _corner_rgb(mesh, name):
+    """角ごとの RGB。無ければ None。"""
+    attr = mesh.color_attributes.get(name)
     n_loops = len(mesh.loops)
-    if attr.domain != "CORNER" or n_loops == 0:
+    if attr is None or attr.domain != "CORNER" or n_loops == 0:
         return None
-
     buf = np.empty(n_loops * 4, dtype=np.float32)
     attr.data.foreach_get("color", buf)
-    cols = buf.reshape(n_loops, 4)[:, :3]
+    return buf.reshape(n_loops, 4)[:, :3]
+
+
+def face_color_keys(mesh, name=VCOL_LAYER_MECHA):
+    """面ごとの色を比較用の整数キーにする。
+
+    mecha_color / bone_color は面単位で決まり、utils.apply_face_colors が
+    角へ展開している。なので面の先頭ループを1つ読めば足りる。
+    """
+    cols = _corner_rgb(mesh, name)
+    if cols is None:
+        return None
 
     starts = np.empty(len(mesh.polygons), dtype=np.int32)
     mesh.polygons.foreach_get("loop_start", starts)
@@ -128,9 +155,91 @@ def face_color_keys(mesh):
     return (q[:, 0] << 24) | (q[:, 1] << 12) | q[:, 2]
 
 
-def line_edges(obj, depsgraph, cam):
-    """線になる辺を集めて、頂点のワールド座標と一緒に返す。"""
+def vertex_paint_level(mesh, name, reduce: str):
+    """STEP4 の塗りを頂点ごとの値にならす。
+
+    mask_color と line_color はユーザーがブラシで塗るので、面の中で値が
+    一様とは限らない。面の先頭ループだけ見る mecha_color とは扱いが違う。
+    角の値を頂点ごとに平均して、辺の判定はその両端で行う。
+    """
+    rgb = _corner_rgb(mesh, name)
+    if rgb is None:
+        return None
+    val = rgb.max(axis=1) if reduce == "max" else rgb.min(axis=1)
+
+    n_loops = len(mesh.loops)
+    loop_vert = np.empty(n_loops, dtype=np.int32)
+    mesh.loops.foreach_get("vertex_index", loop_vert)
+
+    nv = len(mesh.vertices)
+    acc = np.zeros(nv, dtype=np.float64)
+    cnt = np.zeros(nv, dtype=np.int64)
+    np.add.at(acc, loop_vert, val)
+    np.add.at(cnt, loop_vert, 1)
+    return acc / np.maximum(cnt, 1)
+
+
+def _attr_boundary(keys, topo, ne: int) -> np.ndarray:
+    """面ごとの属性が辺の左右で違うか。"""
+    out = np.zeros(ne, dtype=bool)
+    if keys is None:
+        return out
+    two = topo.two_face
+    out[two] = keys[topo.face_a[two]] != keys[topo.face_b[two]]
+    return out
+
+
+def _silhouette(mesh, topo, eval_obj, cam, ne: int) -> np.ndarray:
+    """カメラから見た面の表裏が辺の左右で入れ替わるか(外形線)。
+
+    法線をワールドへ移すより、カメラをローカルへ移すほうが安い。
+    """
     from mathutils import Vector
+
+    nf = topo.n_faces
+    normals = np.empty(nf * 3, dtype=np.float32)
+    mesh.polygons.foreach_get("normal", normals)
+    normals = normals.reshape(nf, 3).astype(np.float64)
+
+    inv = eval_obj.matrix_world.inverted()
+    if cam.data.type == "ORTHO":
+        view = np.array(inv.to_3x3()
+                        @ (cam.matrix_world.to_3x3()
+                           @ Vector((0.0, 0.0, -1.0))))
+        facing = normals @ view
+    else:
+        cam_local = np.array(inv @ cam.matrix_world.translation)
+        facing = np.einsum("ij,ij->i", normals,
+                           topo.center.astype(np.float64) - cam_local)
+    front = facing < 0.0
+    out = np.zeros(ne, dtype=bool)
+    two = topo.two_face
+    out[two] = front[topo.face_a[two]] != front[topo.face_b[two]]
+    return out
+
+
+def _paint_removed(mesh, ev: np.ndarray) -> np.ndarray:
+    """STEP4 の塗りで消される辺。
+
+    mask_color は「塗ったところの線が消える(明るさは問わない)」、
+    line_color は「白いほど薄く、白で見えなくなる」。プロッタは濃淡を
+    出せないので、どちらも辺の両端の平均で二値化する。ここを見ないと
+    ビューポートで消したはずの線が SVG に残る。
+    """
+    removed = np.zeros(len(ev), dtype=bool)
+    for name, reduce in ((VCOL_LAYER_MASK, "max"), (VCOL_LAYER_LINE, "min")):
+        level = vertex_paint_level(mesh, name, reduce)
+        if level is None:
+            continue
+        edge_level = 0.5 * (level[ev[:, 0]] + level[ev[:, 1]])
+        removed |= edge_level > PAINT_THRESHOLD
+    return removed
+
+
+def line_edges(obj, depsgraph, cam, opts: "SvgOptions" = None):
+    """線になる辺を集めて、頂点のワールド座標と一緒に返す。"""
+    if opts is None:
+        opts = SvgOptions()
 
     eval_obj = obj.evaluated_get(depsgraph)
     mesh = eval_obj.to_mesh()
@@ -138,69 +247,67 @@ def line_edges(obj, depsgraph, cam):
         if len(mesh.polygons) == 0 or len(mesh.edges) == 0:
             return None
 
-        keys = face_color_keys(mesh)
-        if keys is None:
-            return None
-
         # 辺 -> 面2枚の対応はアドオン本体と同じものを使う。ここで別実装を
         # 持つと、線の位置がレンダーとずれても気づけない
         topo = mesh_islands.MeshTopology(mesh)
         ne = topo.n_edges
-        nf = topo.n_faces
-
-        color = np.zeros(ne, dtype=bool)
-        two = topo.two_face
-        color[two] = keys[topo.face_a[two]] != keys[topo.face_b[two]]
-        open_edge = ~two
-
-        # 外形線: カメラから見た面の表裏が辺の左右で入れ替わる。
-        # 法線をワールドへ移すより、カメラをローカルへ移すほうが安い
-        normals = np.empty(nf * 3, dtype=np.float32)
-        mesh.polygons.foreach_get("normal", normals)
-        normals = normals.reshape(nf, 3).astype(np.float64)
-
-        inv = eval_obj.matrix_world.inverted()
-        if cam.data.type == "ORTHO":
-            view = np.array(inv.to_3x3()
-                            @ (cam.matrix_world.to_3x3()
-                               @ Vector((0.0, 0.0, -1.0))))
-            facing = normals @ view
-        else:
-            cam_local = np.array(inv @ cam.matrix_world.translation)
-            facing = np.einsum("ij,ij->i", normals,
-                               topo.center.astype(np.float64) - cam_local)
-        front = facing < 0.0
-        sil = np.zeros(ne, dtype=bool)
-        sil[two] = front[topo.face_a[two]] != front[topo.face_b[two]]
-
-        keep = color | open_edge | sil
-        if not keep.any():
-            return None
 
         ev = np.empty(ne * 2, dtype=np.int32)
         mesh.edges.foreach_get("vertices", ev)
-        ev = ev.reshape(ne, 2)[keep]
+        ev = ev.reshape(ne, 2)
+
+        # 出どころごとに求めて足し合わせる。ラスタ経路が複数チャンネルの
+        # エッジを重ねるのと同じ考え方
+        src = opts.sources
+        parts = {}
+        if src.get("mecha", True):
+            parts["mecha"] = _attr_boundary(
+                face_color_keys(mesh, VCOL_LAYER_MECHA), topo, ne)
+        if src.get("material", True):
+            parts["material"] = _attr_boundary(topo.material, topo, ne)
+        if src.get("bone", False):
+            parts["bone"] = _attr_boundary(
+                face_color_keys(mesh, VCOL_LAYER_BONE), topo, ne)
+        if src.get("open", True):
+            parts["open"] = ~topo.two_face
+        if src.get("silhouette", True):
+            parts["silhouette"] = _silhouette(mesh, topo, eval_obj, cam, ne)
+
+        if not parts:
+            return None
+        keep = np.zeros(ne, dtype=bool)
+        for m in parts.values():
+            keep |= m
+
+        if opts.respect_paint:
+            keep &= ~_paint_removed(mesh, ev)
+
+        if not keep.any():
+            return None
+
+        # 出どころ別の本数。重なりがあるので合計は総数より多くなる
+        counts = {k: int((m & keep).sum()) for k, m in parts.items()}
 
         nv = len(mesh.vertices)
         co = np.empty(nv * 3, dtype=np.float32)
         mesh.vertices.foreach_get("co", co)
         co = co.reshape(nv, 3).astype(np.float64)
 
-        m = np.array(eval_obj.matrix_world, dtype=np.float64)
-        world = co @ m[:3, :3].T + m[:3, 3]
-        centers = topo.center.astype(np.float64) @ m[:3, :3].T + m[:3, 3]
+        m4 = np.array(eval_obj.matrix_world, dtype=np.float64)
+        world = co @ m4[:3, :3].T + m4[:3, 3]
+        centers = topo.center.astype(np.float64) @ m4[:3, :3].T + m4[:3, 3]
 
-        kind = np.where(color[keep], 0, np.where(open_edge[keep], 1, 2))
-        return {"verts": world, "edges": ev, "kind": kind, "centers": centers}
+        return {"verts": world, "edges": ev[keep], "centers": centers,
+                "counts": counts}
     finally:
         eval_obj.to_mesh_clear()
 
 
-def extract_lines(objs, depsgraph, cam) -> list:
+def extract_lines(objs, depsgraph, cam, opts: "SvgOptions" = None) -> list:
     """対象メッシュぶんの line_edges をまとめる。"""
     out = []
     for obj in objs:
-        data = line_edges(obj, depsgraph, cam)
+        data = line_edges(obj, depsgraph, cam, opts)
         if data is not None:
             out.append(data)
     return out
@@ -443,10 +550,11 @@ def visible_polylines(collected: list, project, depth, opts: SvgOptions,
                       mode: str) -> tuple:
     """見えている線をピクセル座標の折れ線にする。統計も返す。"""
     polylines = []
-    kinds = np.zeros(3, dtype=np.int64)
+    counts = defaultdict(int)
     n_edges = 0
     for data in collected:
-        kinds += np.bincount(data["kind"], minlength=3)
+        for k, v in data["counts"].items():
+            counts[k] += v
         n_edges += len(data["edges"])
         verts = data["verts"]
 
@@ -460,9 +568,8 @@ def visible_polylines(collected: list, project, depth, opts: SvgOptions,
             polylines.extend(
                 list(np.stack([x_px, y_px], axis=1).reshape(-1, 2, 2)))
 
-    stats = {"edges_line": int(n_edges),
-             "edges_by_kind": {"color": int(kinds[0]), "open": int(kinds[1]),
-                               "silhouette": int(kinds[2])}}
+    # 重なりがあるので、出どころ別の合計は edges_line より多くなる
+    stats = {"edges_line": int(n_edges), "edges_by_source": dict(counts)}
     return polylines, stats
 
 
@@ -721,10 +828,11 @@ def export_svg(context, filepath: str, opts: SvgOptions,
     depsgraph = context.evaluated_depsgraph_get()
     project = Projection(cam, depsgraph, width, height)
 
-    collected = extract_lines(objs, depsgraph, cam)
+    collected = extract_lines(objs, depsgraph, cam, opts)
     if not collected:
         raise RuntimeError(
-            f"No {VCOL_LAYER_MECHA} found. Run STEP1 first")
+            "No lines found. Run STEP0 or STEP1 first, or enable more "
+            "line sources")
 
     mode, hits = choose_depth_mode(
         depth, project, np.concatenate([d["centers"] for d in collected]),

@@ -31,9 +31,33 @@
   `svg_export.py` and the dev harness calls the same functions, following
   the same split as `fp_core.py`.
 
+- **Selectable line sources for the SVG export.** The vector path used to
+  read `mecha_color` only, while the raster path detects edges across
+  several channels, so the two produced different drawings. Material
+  boundaries and `bone_color` are now available as sources, and each of
+  the five (color separation / material / bone / open edges / silhouette)
+  can be switched off on its own.
+
+  `bone` is off by default, unlike the raster path where `fp_ch_bone` is
+  1.0: bone boundaries add a lot of lines for a plotter.
+
+  Depth discontinuity is deliberately not a source. In vector form a depth
+  jump is the front object's silhouette edge, which is already emitted;
+  the remainder would need screen-space tracing.
+
+- **STEP4 paint is honoured by the SVG export.** `mask_color` (erase the
+  line) and `line_color` (white makes it invisible) were both ignored, so
+  a line erased in the viewport still appeared in the SVG. Both layers are
+  brush-painted rather than per-face, so corner values are averaged per
+  vertex and each edge is judged from its two endpoints, thresholded at
+  0.5 because a plotter cannot draw a half-visible line.
+
 ### Notes
 - The raster pipeline (STEP0-STEP5) is unchanged and remains fully
   available; only the panel order puts SVG export first.
+- Ten regression tests cover the SVG path (49 total, was 39), including
+  one that pins the pen starting outside the drawing - a case where
+  `linesort` previously became a silent no-op.
 
 ## [2.7.0] - 2026-08-23
 ### Changed

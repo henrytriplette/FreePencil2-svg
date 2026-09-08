@@ -14,6 +14,7 @@ import traceback
 from pathlib import Path
 
 import bpy
+import numpy as np
 
 BATCH = Path(__file__).resolve().parent
 sys.path.insert(0, str(BATCH))
@@ -1626,6 +1627,268 @@ def t39():
     finally:
         bpy.ops.wm.read_homefile(use_empty=True)
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ------------------------------------------------------------ SVG 書き出し
+def _svg_scene():
+    """カメラ付きの塗り分け済みシーン。SVG 側のテストの共通の下ごしらえ。"""
+    bpy.ops.wm.read_homefile(use_empty=True)
+    bpy.ops.mesh.primitive_monkey_add(size=2.0)
+    scene = bpy.context.scene
+    scene.fp_use_random_seed = False
+    scene.fp_color_seed = 1234
+    objs = [o for o in scene.objects if o.type == "MESH"]
+    fp_batch.apply_white_material(objs)
+    fp_batch.select_meshes()
+    bpy.ops.freepencil.auto_vertex_color()
+    fp_batch.setup_camera_and_light()
+    scene.render.resolution_x = 400
+    scene.render.resolution_y = 300
+    return objs
+
+
+def _n_edges(opts=None):
+    """線になる辺の本数。レンダーを走らせないので速い。"""
+    from freepencil2 import svg_export
+    dg = bpy.context.evaluated_depsgraph_get()
+    objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    got = svg_export.extract_lines(objs, dg, bpy.context.scene.camera, opts)
+    return sum(len(d["edges"]) for d in got) if got else 0
+
+
+@test("SVG: bone source is off by default, and enabling it never removes edges")
+def t40():
+    from freepencil2 import svg_export
+    _svg_scene()
+    assert svg_export.SvgOptions().sources["bone"] is False, (
+        "bone は既定で切れているべき")
+
+    off = {s: False for s in svg_export.LINE_SOURCES}
+    base = _n_edges(svg_export.SvgOptions(sources={**off, "mecha": True}))
+    both = _n_edges(svg_export.SvgOptions(
+        sources={**off, "mecha": True, "bone": True}))
+    assert both >= base, f"bone を足して減った: {base} -> {both}"
+
+
+@test("SVG: each line source can be switched off independently")
+def t41():
+    from freepencil2 import svg_export
+    _svg_scene()
+    every = {s: True for s in svg_export.LINE_SOURCES}
+    total = _n_edges(svg_export.SvgOptions(sources=every))
+    assert total > 0, "全部入りで線が出ていない"
+
+    for name in svg_export.LINE_SOURCES:
+        srcs = {s: (s != name) for s in svg_export.LINE_SOURCES}
+        n = _n_edges(svg_export.SvgOptions(sources=srcs))
+        assert n <= total, f"{name} を切ったのに増えた: {total} -> {n}"
+
+    none = _n_edges(svg_export.SvgOptions(
+        sources={s: False for s in svg_export.LINE_SOURCES}))
+    assert none == 0, f"全部切っても線が出た: {none} 本"
+
+
+@test("SVG: mask_color painted in STEP4 erases lines")
+def t42():
+    from freepencil2 import svg_export
+    objs = _svg_scene()
+    opts = svg_export.SvgOptions()
+    before = _n_edges(opts)
+    assert before > 0
+
+    # mask_color を全面塗る = 全部の線を消す指示
+    mesh = objs[0].data
+    attr = mesh.color_attributes[svg_export.VCOL_LAYER_MASK]
+    attr.data.foreach_set("color", [1.0] * (len(mesh.loops) * 4))
+    mesh.update()
+
+    assert _n_edges(opts) == 0, "mask_color を塗っても線が残った"
+
+    # respect_paint を切れば元どおり。消しているのが塗りだと確かめる
+    ignored = _n_edges(svg_export.SvgOptions(respect_paint=False))
+    assert ignored == before, (
+        f"respect_paint=False で本数が変わった: {before} -> {ignored}")
+
+
+@test("SVG: line_color set to white (invisible) erases lines")
+def t43():
+    from freepencil2 import svg_export
+    objs = _svg_scene()
+    opts = svg_export.SvgOptions()
+    assert _n_edges(opts) > 0
+
+    mesh = objs[0].data
+    attr = mesh.color_attributes[svg_export.VCOL_LAYER_LINE]
+    attr.data.foreach_set("color", [1.0] * (len(mesh.loops) * 4))  # 白=見えない
+    mesh.update()
+
+    assert _n_edges(opts) == 0, "line_color を白にしても線が残った"
+
+
+@test("SVG: linemerge keeps drawn length, linesort cuts pen-up travel")
+def t44():
+    import numpy as np
+    from freepencil2 import svg_export
+
+    # 端点を共有する短い線分。結合されるべき形
+    pts = np.array([[0.0, 0.0], [10.0, 0.0], [20.0, 0.0], [20.0, 10.0]])
+    pieces = [pts[i:i + 2].copy() for i in range(len(pts) - 1)]
+    # 離れた線を混ぜ、並べ替えの効果が出るようにする
+    far = [np.array([[100.0, 100.0], [110.0, 100.0]]),
+           np.array([[50.0, 50.0], [60.0, 50.0]])]
+    lines = [pieces[0], far[0], pieces[1], far[1], pieces[2]]
+
+    def drawn(ls):
+        return sum(float(np.hypot(*(p[1:] - p[:-1]).T).sum()) for p in ls)
+
+    merged = svg_export.linemerge(lines, 0.1)
+    assert len(merged) < len(lines), (
+        f"つながらなかった: {len(lines)} -> {len(merged)}")
+    assert abs(drawn(merged) - drawn(lines)) < 1e-6, "結合で描く長さが変わった"
+
+    before = svg_export.pen_up_travel(merged)
+    after = svg_export.pen_up_travel(svg_export.linesort(merged))
+    assert after <= before + 1e-9, f"並べ替えで移動が伸びた: {before} -> {after}"
+
+
+@test("SVG: linesort still works when the pen starts far outside the drawing")
+def t45():
+    """絵が原点から遠いと探索の打ち切りが早すぎ、1本も見つからないまま
+    linesort が入力をそのまま返す不具合があった。ペン移動が変わらないこと
+    でしか気づけなかったので、ここで固定する。"""
+    import numpy as np
+    from freepencil2 import svg_export
+
+    rng = np.random.default_rng(0)
+    base = np.array([150.0, 60.0])          # A4 の中ほど。原点から遠い
+    lines = []
+    for _ in range(60):
+        p = base + rng.random(2) * 20.0
+        lines.append(np.array([p, p + rng.random(2) * 2.0]))
+
+    before = svg_export.pen_up_travel(lines)
+    after = svg_export.pen_up_travel(svg_export.linesort(lines))
+    assert after < before * 0.9, (
+        f"並べ替えが効いていない(打ち切りが早すぎる?): "
+        f"{before:.1f} -> {after:.1f}")
+
+
+@test("SVG: hidden line removal culls, and the file is written in mm")
+def t46():
+    import shutil
+    import tempfile
+    from mathutils import Vector
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    # 猿の手前に箱を置く。隠れるぶんだけ線が減るはず
+    d = Vector((1.0, -1.0, 0.65)).normalized()
+    bpy.ops.mesh.primitive_cube_add(size=1.1, location=d * 1.35)
+    objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    fp_batch.apply_white_material(objs)
+    fp_batch.select_meshes()
+    bpy.ops.freepencil.auto_vertex_color()
+
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        shown = svg_export.export_svg(
+            bpy.context, str(tmp / "a.svg"),
+            svg_export.SvgOptions(depth_res=400))
+        every = svg_export.export_svg(
+            bpy.context, str(tmp / "b.svg"),
+            svg_export.SvgOptions(depth_res=400, keep_hidden=True))
+
+        assert (tmp / "a.svg").stat().st_size > 0, "SVG が空"
+        assert shown["paths_raw"] < every["paths_raw"], (
+            "隠線処理で本数が減っていない: "
+            f"{shown['paths_raw']} vs {every['paths_raw']}")
+        assert shown["depth_mode"] in ("plane", "ray")
+        head = (tmp / "a.svg").read_text(encoding="utf-8")[:400]
+        assert "mm" in head, "mm 単位で書かれていない"
+        assert "fill:none" in head or 'fill="none"' in head, "塗りが付いている"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: export leaves the user's compositor tree alone")
+def t47():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export, compat
+
+    _svg_scene()
+    bpy.ops.freepencil4.link_button()
+    bpy.ops.freepencil2.link_button()
+    scene = bpy.context.scene
+    tree = compat.get_compositor_tree(scene)
+    before = len(tree.nodes) if tree else 0
+    assert before > 0, "STEP3 でノードができていない"
+    scenes_before = len(bpy.data.scenes)
+
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        svg_export.export_svg(bpy.context, str(tmp / "c.svg"),
+                              svg_export.SvgOptions(depth_res=320))
+        after = compat.get_compositor_tree(scene)
+        assert after is tree, "コンポジタツリーが差し替わった"
+        assert len(after.nodes) == before, (
+            f"ノード数が変わった: {before} -> {len(after.nodes)}")
+        assert len(bpy.data.scenes) == scenes_before, "一時シーンが残っている"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: material boundaries produce edges and can be switched off")
+def t48():
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    obj = bpy.context.scene.objects["Suzanne"]
+    mesh = obj.data
+    # 2つ目のマテリアルを作り、面の半分に割り当てる
+    for name in ("fp_mat_a", "fp_mat_b"):
+        mesh.materials.append(bpy.data.materials.new(name))
+    idx = np.zeros(len(mesh.polygons), dtype=np.int32)
+    idx[::2] = 1
+    mesh.polygons.foreach_set("material_index", idx)
+    mesh.update()
+
+    off = {s: False for s in svg_export.LINE_SOURCES}
+    only_mat = _n_edges(svg_export.SvgOptions(
+        sources={**off, "material": True}))
+    assert only_mat > 0, "マテリアル境界が1本も出ていない"
+
+    assert _n_edges(svg_export.SvgOptions(sources=off)) == 0, (
+        "全部切っても線が出た")
+
+
+@test("SVG: bone_color differences are used only when the bone source is on")
+def t49():
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    obj = bpy.context.scene.objects["Suzanne"]
+    mesh = obj.data
+    # リグ無しでも仕組みは試せる。面ごとに bone_color を2色へ塗り分ける
+    attr = mesh.color_attributes[svg_export.VCOL_LAYER_BONE]
+    starts = np.empty(len(mesh.polygons), dtype=np.int32)
+    totals = np.empty(len(mesh.polygons), dtype=np.int32)
+    mesh.polygons.foreach_get("loop_start", starts)
+    mesh.polygons.foreach_get("loop_total", totals)
+    buf = np.zeros((len(mesh.loops), 4), dtype=np.float32)
+    buf[:, 3] = 1.0
+    for f in range(0, len(mesh.polygons), 2):
+        buf[starts[f]:starts[f] + totals[f], 0] = 1.0
+    attr.data.foreach_set("color", buf.ravel())
+    mesh.update()
+
+    off = {s: False for s in svg_export.LINE_SOURCES}
+    with_bone = _n_edges(svg_export.SvgOptions(
+        sources={**off, "bone": True}))
+    assert with_bone > 0, "bone_color の境界が拾えていない"
+
+    without = _n_edges(svg_export.SvgOptions(sources={**off, "bone": False}))
+    assert without == 0, f"bone を切ったのに線が出た: {without} 本"
 
 
 def main():

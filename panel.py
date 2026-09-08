@@ -97,6 +97,16 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         col.prop(scene, "fp_svg_margin", text=t("Margin (mm)"))
         col.prop(scene, "fp_svg_pen", text=t("Pen width (mm)"))
 
+        box = layout.box()
+        box.label(text=t("Line sources"))
+        col = box.column(align=True)
+        col.prop(scene, "fp_svg_src_mecha", text=t("Color separation"))
+        col.prop(scene, "fp_svg_src_material", text=t("Material boundaries"))
+        col.prop(scene, "fp_svg_src_bone", text=t("Bone boundaries"))
+        col.prop(scene, "fp_svg_src_open", text=t("Open edges"))
+        col.prop(scene, "fp_svg_src_silhouette", text=t("Silhouette"))
+        col.prop(scene, "fp_svg_respect_paint", text=t("Honour STEP4 paint"))
+
         col = layout.column(align=True)
         col.prop(scene, "fp_svg_merge_tolerance", text=t("Merge (mm)"))
         col.prop(scene, "fp_svg_simplify", text=t("Simplify (mm)"))
