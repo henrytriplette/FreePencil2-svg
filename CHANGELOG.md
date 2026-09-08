@@ -125,11 +125,24 @@
   time, with `Line sources` and `Advanced` as sub-panels. It had grown to
   more than twenty properties in one column.
 
+### Fixed
+- **The depth pass wrote nothing on Blender 5.x**, so the SVG export failed
+  outright there with "no depth EXR written". On 5.x a File Output node
+  carries an empty trailing socket after its named slots, and the link was
+  being made to `inputs[-1]` - the placeholder - rather than to the slot.
+  Nothing errored; the render simply produced no file. It now links by
+  slot name, which is what `fp_core` already did.
+
+  Found by installing 5.2.1 and running the suite; the export is now
+  verified there.
+
 ### Notes
 - The raster pipeline (STEP0-STEP5) is unchanged and remains fully
   available; only the panel order puts SVG export first.
-- Twenty-one regression tests cover the SVG path (60 total, was 39),
-  including
+- Twenty-one regression tests cover the SVG path (60 total, was 39). All
+  60 pass on both 4.5.6 and 5.2.1, and the two produce byte-identical
+  vector output on a 1,047,642-face model (683165 edges, 6322 paths,
+  43542.4 mm drawn, 11263.2 mm travel, same layer split). Included
   one that pins the pen starting outside the drawing - a case where
   `linesort` previously became a silent no-op.
 

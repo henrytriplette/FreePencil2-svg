@@ -183,8 +183,10 @@ Blender 4.5, from pressing STEP0 until completion (each measured twice).
 
 ## Supported versions
 
-The same package can be installed on all of the following. The 33 regression tests
-are run on every version.
+The same package can be installed on all of the following, and the regression
+tests are run on every version (60 of them now, 21 covering the SVG export).
+The SVG export is confirmed to produce identical results on 4.5.6 and 5.2.1 -
+edges, path count and drawn length all match on a 1M-face model.
 
 | Blender | Status | Rendering | Live viewport preview |
 |---|---|---|---|

@@ -452,10 +452,15 @@ def render_depth_pass(scene, cam, width: int, height: int) -> np.ndarray:
         fo = compat.new_node(tree, "CompositorNodeOutputFile")
         compat.file_output_set_dir(fo, str(depth_dir))
         compat.file_output_clear_slots(fo)
-        compat.file_output_add_slot(fo, "depth", file_format="OPEN_EXR",
+        slot_name = "depth"
+        compat.file_output_add_slot(fo, slot_name, file_format="OPEN_EXR",
                                     color_mode="BW")
         fo.format.color_depth = "32"
-        tree.links.new(sock, fo.inputs[-1])
+        # 宛先は必ず名前で引く。5.x の File Output は名前付きスロットの
+        # 後ろに空の追加用ソケットを持つので、inputs[-1] だとそちらへ
+        # 繋がってしまい、レンダーしてもファイルが1つも書かれない
+        # (fp_core も fo.inputs[slot_name] で繋いでいる)
+        tree.links.new(sock, fo.inputs[slot_name])
 
         bpy.ops.render.render(scene=tmp.name, write_still=False)
 

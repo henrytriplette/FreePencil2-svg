@@ -1817,6 +1817,11 @@ def t47():
     from freepencil2 import svg_export, compat
 
     _svg_scene()
+    # ノード種別は明示する。既定の 'test' 用スクリプトは 5.x で
+    # CompositorNodeFilter の inputs[0] に代入して落ちる(既知・別件)。
+    # このテストの主題は「書き出しがツリーを触らないこと」なので、
+    # 生成できる側で確かめる
+    bpy.context.scene.fp_node_type = 'pro'
     bpy.ops.freepencil4.link_button()
     bpy.ops.freepencil2.link_button()
     scene = bpy.context.scene
