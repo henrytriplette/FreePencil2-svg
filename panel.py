@@ -17,7 +17,8 @@ from .paint_vertex_color import LINK_MAKE_FP_OT_VCOLOR
 from .half_fill import LINK_MAKE_FP_OT_HALF_FILL
 from .render_cameras import FP_OT_RENDER_CAMERAS
 from .auto_setup import FP_OT_AUTO_SETUP
-from .svg_export import (FP_OT_EXPORT_SVG, FP_OT_SVG_PREVIEW,
+from .svg_export import (FP_OT_EXPORT_SVG, FP_OT_EXPORT_SVG_CAMERAS,
+                         FP_OT_SVG_PRESET, FP_OT_SVG_PREVIEW,
                          FP_OT_SVG_PREVIEW_CLEAR, VCOL_LAYER_MECHA)
 from . import svg_export
 
@@ -77,6 +78,9 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
 
     ラスタのコンポジタ経路(STEP2/3)は残してあるが、こちらはそれを通らない。
     Sobel の線は幅を持つ帯なので、追跡するとプロッタが輪郭を二重になぞる。
+
+    毎回触るものだけをここに置き、線の出どころと詰めの設定は子パネルへ
+    分けている(プロパティが増えて縦に長くなりすぎたため)。
     """
 
     bl_label = "SVG Export (pen plotter)"
@@ -94,11 +98,8 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         elif not _painted_mesh_exists(context):
             layout.label(text=t("Run STEP0 or STEP1 first"), icon="INFO")
 
-        col = layout.column(align=True)
-        col.prop(scene, "fp_svg_page", text=t("Page"))
-        col.prop(scene, "fp_svg_fit", text=t("Fit"))
-        col.prop(scene, "fp_svg_margin", text=t("Margin (mm)"))
-        col.prop(scene, "fp_svg_pen", text=t("Pen width (mm)"))
+        layout.operator_menu_enum(FP_OT_SVG_PRESET.bl_idname, "preset",
+                                  text=t("Preset"), icon="PRESET")
 
         row = layout.row(align=True)
         row.operator(FP_OT_SVG_PREVIEW.bl_idname,
@@ -110,9 +111,45 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
             if info:
                 layout.label(text=f"{t('Preview')}: {info}", icon="INFO")
 
-        box = layout.box()
-        box.label(text=t("Line sources"))
-        col = box.column(align=True)
+        col = layout.column(align=True)
+        col.prop(scene, "fp_svg_page", text=t("Page"))
+        col.prop(scene, "fp_svg_fit", text=t("Fit"))
+        col.prop(scene, "fp_svg_margin", text=t("Margin (mm)"))
+        col.prop(scene, "fp_svg_pen", text=t("Pen width (mm)"))
+
+        col = layout.column(align=True)
+        col.prop(scene, "fp_svg_layers", text=t("Layers"))
+        sub = col.row(align=True)
+        sub.enabled = scene.fp_svg_layers != "NONE"
+        sub.prop(scene, "fp_svg_split_files", text=t("One file per layer"))
+
+        layout.operator(FP_OT_EXPORT_SVG.bl_idname,
+                        text=t("Export SVG"), icon="EXPORT")
+        row = layout.row()
+        row.enabled = bool(bpy.data.filepath)
+        row.operator(FP_OT_EXPORT_SVG_CAMERAS.bl_idname,
+                     text=t("Export checked cameras"), icon="RENDER_RESULT")
+        if not bpy.data.filepath:
+            layout.label(text=t("Save the .blend to batch cameras"),
+                         icon="INFO")
+
+        if scene.fp_svg_last_result:
+            for line in scene.fp_svg_last_result.split("|"):
+                layout.label(text=line, icon="DOT")
+
+
+class FP_PT_SvgSources(_FPSub, bpy.types.Panel):
+    """どの辺を線にするか。"""
+
+    bl_label = "Line sources"
+    bl_idname = "FREEPENCIL_PT_SVG_SOURCES"
+    bl_parent_id = "FREEPENCIL_PT_SVG"
+    bl_order = 0
+
+    def draw(self, context):
+        t = bpy.app.translations.pgettext
+        scene = context.scene
+        col = self.layout.column(align=True)
         col.prop(scene, "fp_svg_src_mecha", text=t("Color separation"))
         col.prop(scene, "fp_svg_src_material", text=t("Material boundaries"))
         col.prop(scene, "fp_svg_src_bone", text=t("Bone boundaries"))
@@ -120,37 +157,45 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         col.prop(scene, "fp_svg_src_silhouette", text=t("Silhouette"))
         col.prop(scene, "fp_svg_respect_paint", text=t("Honour STEP4 paint"))
 
+
+class FP_PT_SvgAdvanced(_FPSub, bpy.types.Panel):
+    """一度決めたら普段は触らない設定。"""
+
+    bl_label = "Advanced"
+    bl_idname = "FREEPENCIL_PT_SVG_ADVANCED"
+    bl_parent_id = "FREEPENCIL_PT_SVG"
+    bl_order = 1
+
+    def draw(self, context):
+        t = bpy.app.translations.pgettext
+        layout = self.layout
+        scene = context.scene
+
         col = layout.column(align=True)
+        col.label(text=t("Paths"))
         col.prop(scene, "fp_svg_merge_tolerance", text=t("Merge (mm)"))
         col.prop(scene, "fp_svg_simplify", text=t("Simplify (mm)"))
         col.prop(scene, "fp_svg_sort", text=t("Sort draw order"))
-        col.prop(scene, "fp_svg_layers", text=t("Layers"))
-        sub = col.column(align=True)
-        sub.enabled = scene.fp_svg_layers == "SOURCE"
-        sub.prop(scene, "fp_svg_outline_layer", text=t("Outline layer"))
-        sub.prop(scene, "fp_svg_outline_gap", text=t("Outline depth step"))
 
-        box = layout.box()
-        box.label(text=t("Hidden line removal"))
-        col = box.column(align=True)
+        col = layout.column(align=True)
+        col.label(text=t("Outline layer"))
+        col.enabled = scene.fp_svg_layers == "SOURCE"
+        col.prop(scene, "fp_svg_outline_layer", text=t("Outline layer"))
+        col.prop(scene, "fp_svg_outline_gap", text=t("Outline depth step"))
+
+        col = layout.column(align=True)
+        col.label(text=t("Hidden line removal"))
         col.prop(scene, "fp_svg_depth_res", text=t("Depth resolution"))
         col.prop(scene, "fp_svg_samples", text=t("Samples per edge"))
         col.prop(scene, "fp_svg_bias", text=t("Depth bias"))
         col.prop(scene, "fp_svg_neighbourhood", text=t("Neighbourhood"))
         col.prop(scene, "fp_svg_keep_hidden", text=t("Keep hidden lines"))
 
-        box = layout.box()
-        box.label(text=t("Plot estimate"))
-        col = box.column(align=True)
+        col = layout.column(align=True)
+        col.label(text=t("Plot estimate"))
         col.prop(scene, "fp_svg_plot_speed", text=t("Pen down mm/s"))
         col.prop(scene, "fp_svg_travel_speed", text=t("Travel mm/s"))
         col.prop(scene, "fp_svg_pen_lift", text=t("Pen lift (s)"))
-
-        layout.operator(FP_OT_EXPORT_SVG.bl_idname,
-                        text=t("Export SVG"), icon="EXPORT")
-        if scene.fp_svg_last_result:
-            for line in scene.fp_svg_last_result.split("|"):
-                layout.label(text=line, icon="DOT")
 
 
 class FP_PT_Step0(_FPSub, bpy.types.Panel):

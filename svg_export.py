@@ -86,14 +86,17 @@ class SvgOptions:
                  "samples", "bias", "neighbourhood", "depth_res",
                  "sort", "keep_hidden", "seed", "sources", "respect_paint",
                  "layers", "outline_layer", "outline_gap",
-                 "fit", "plot_speed", "travel_speed", "pen_lift")
+                 "fit", "plot_speed", "travel_speed", "pen_lift",
+                 "split_files")
 
     def __init__(self, page="A4", margin=10.0, pen=0.3, merge_tolerance=0.1,
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
                  depth_res=1600, sort=True, keep_hidden=False, seed=42,
                  sources=None, respect_paint=True, layers="NONE",
-                 outline_layer=True, outline_gap=0.02, fit="CAMERA",
-                 plot_speed=80.0, travel_speed=200.0, pen_lift=0.12):
+                 outline_layer=True, outline_gap=0.02, fit="DRAWING",
+                 plot_speed=80.0, travel_speed=200.0, pen_lift=0.12,
+                 split_files=False):
+        self.split_files = split_files
         self.fit = fit
         self.plot_speed = plot_speed
         self.travel_speed = travel_speed
@@ -143,10 +146,11 @@ class SvgOptions:
             layers=g(scene, "fp_svg_layers", "NONE"),
             outline_layer=g(scene, "fp_svg_outline_layer", True),
             outline_gap=g(scene, "fp_svg_outline_gap", 0.02),
-            fit=g(scene, "fp_svg_fit", "CAMERA"),
+            fit=g(scene, "fp_svg_fit", "DRAWING"),
             plot_speed=g(scene, "fp_svg_plot_speed", 80.0),
             travel_speed=g(scene, "fp_svg_travel_speed", 200.0),
             pen_lift=g(scene, "fp_svg_pen_lift", 0.12),
+            split_files=g(scene, "fp_svg_split_files", False),
         )
 
 
@@ -935,7 +939,8 @@ def estimate_seconds(draw_mm: float, pen_up_mm: float, paths: int,
             + paths * opts.pen_lift)
 
 
-def build_svg(groups, width: int, height: int, opts: SvgOptions) -> tuple:
+def build_svg(groups, width: int, height: int, opts: SvgOptions,
+              transform=None) -> tuple:
     """レイヤーごとの折れ線を mm に移し、SVG 文字列と統計を返す。
 
     結合も並べ替えもレイヤーの中だけで行う。またいで結合するとペンを
@@ -945,8 +950,12 @@ def build_svg(groups, width: int, height: int, opts: SvgOptions) -> tuple:
         groups = {"lines": groups}
 
     page_w, page_h = page_mm(opts.page, width, height)
-    scale, off_x, off_y = _page_transform(groups, page_w, page_h,
-                                          width, height, opts)
+    # 層ごとに別ファイルへ書くときは、全部の層から出した変換を渡してもらう。
+    # ファイルごとに計算し直すと、層の位置が紙の上でずれて重ならない
+    if transform is None:
+        transform = _page_transform(groups, page_w, page_h,
+                                    width, height, opts)
+    scale, off_x, off_y = transform
 
     raw_total = sum(len(v) for v in groups.values())
     stats = {"paths_raw": raw_total, "layers": {}}
@@ -1048,14 +1057,39 @@ def export_svg(context, filepath: str, opts: SvgOptions,
         opts.seed)
 
     groups, stats = visible_polylines(collected, project, depth, opts, mode)
-    svg, svg_stats = build_svg(groups, width, height, opts)
 
-    Path(filepath).write_text(svg, encoding="utf-8")
+    page_w, page_h = page_mm(opts.page, width, height)
+    transform = _page_transform(groups, page_w, page_h, width, height, opts)
+
+    base = Path(filepath)
+    written = []
+    if opts.split_files and opts.layers != "NONE" and len(groups) > 1:
+        # ペンごとに1枚。位置を合わせるため変換は全層ぶんから作って共有する
+        svg_stats = {"paths": 0, "points": 0, "paths_raw": 0,
+                     "paths_merged": 0, "pen_up_mm": 0.0, "draw_mm": 0.0,
+                     "estimated_seconds": 0.0, "layers": {},
+                     "page_mm": [page_w, page_h]}
+        for name in _layer_order(groups.keys()):
+            one, st = build_svg({name: groups[name]}, width, height, opts,
+                                transform)
+            out = base.with_name(f"{base.stem}_{name}{base.suffix}")
+            out.write_text(one, encoding="utf-8")
+            written.append(str(out))
+            for k in ("paths", "points", "paths_raw", "paths_merged",
+                      "pen_up_mm", "draw_mm", "estimated_seconds"):
+                svg_stats[k] += st[k]
+            svg_stats["layers"].update(st["layers"])
+        for k in ("pen_up_mm", "draw_mm", "estimated_seconds"):
+            svg_stats[k] = round(svg_stats[k], 1)
+    else:
+        svg, svg_stats = build_svg(groups, width, height, opts, transform)
+        base.write_text(svg, encoding="utf-8")
+        written.append(str(base))
 
     stats.update(svg_stats)
     stats.update({"depth_mode": mode, "depth_mode_hits": hits,
                   "resolution": [width, height], "objects": len(objs),
-                  "svg": filepath})
+                  "svg": written[0], "files": written})
     return stats
 
 
@@ -1275,4 +1309,119 @@ class FP_OT_SVG_PREVIEW_CLEAR(bpy.types.Operator):
         for area in context.screen.areas:
             if area.type == 'VIEW_3D':
                 area.tag_redraw()
+        return {'FINISHED'}
+
+
+# ------------------------------------------------------------ プリセット
+# プロパティが増えたので、よく使う組み合わせに名前を付ける。ここを弄れば
+# パネルの選択肢もそのまま増える
+SVG_PRESETS = {
+    "FINE": {
+        "label": "Fine pen",
+        "values": {"fp_svg_pen": 0.3, "fp_svg_merge_tolerance": 0.1,
+                   "fp_svg_simplify": 0.05, "fp_svg_layers": "NONE",
+                   "fp_svg_depth_res": 1600, "fp_svg_samples": 8},
+    },
+    "BOLD_OUTLINE": {
+        "label": "Bold outline, 2 pens",
+        "values": {"fp_svg_pen": 0.5, "fp_svg_merge_tolerance": 0.2,
+                   "fp_svg_simplify": 0.08, "fp_svg_layers": "SOURCE",
+                   "fp_svg_outline_layer": True, "fp_svg_outline_gap": 0.10,
+                   "fp_svg_split_files": True, "fp_svg_depth_res": 1600},
+    },
+    "DRAFT": {
+        "label": "Quick draft",
+        "values": {"fp_svg_pen": 0.5, "fp_svg_merge_tolerance": 0.3,
+                   "fp_svg_simplify": 0.25, "fp_svg_layers": "NONE",
+                   "fp_svg_depth_res": 800, "fp_svg_samples": 4,
+                   "fp_svg_src_open": False},
+    },
+}
+
+
+class FP_OT_SVG_PRESET(bpy.types.Operator):
+    """Apply a set of SVG export settings."""
+
+    bl_idname = "freepencil.svg_preset"
+    bl_label = "Preset"
+    bl_description = "Apply a ready-made combination of export settings"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    preset: bpy.props.EnumProperty(
+        name="Preset",
+        items=[(k, v["label"], v["label"]) for k, v in SVG_PRESETS.items()],
+        default="FINE")
+
+    def execute(self, context):
+        spec = SVG_PRESETS.get(self.preset)
+        if spec is None:
+            self.report({'ERROR'}, f"Unknown preset: {self.preset}")
+            return {'CANCELLED'}
+        for name, value in spec["values"].items():
+            setattr(context.scene, name, value)
+        self.report({'INFO'}, f"Preset: {spec['label']}")
+        return {'FINISHED'}
+
+
+# ------------------------------------------------------- カメラ一括出力
+class FP_OT_EXPORT_SVG_CAMERAS(bpy.types.Operator):
+    """Export an SVG for every camera ticked in STEP5."""
+
+    bl_idname = "freepencil.export_svg_cameras"
+    bl_label = "Export checked cameras"
+    bl_description = ("Write one SVG per checked camera into "
+                      "//svg_exports/. Uses the same camera ticks as STEP5")
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(bpy.data.filepath)
+
+    def execute(self, context):
+        import os
+        import re
+
+        scene = context.scene
+        if not bpy.data.filepath:
+            self.report({'ERROR'}, "Save the .blend file first")
+            return {'CANCELLED'}
+
+        cameras = sorted(
+            (o for o in scene.objects
+             if o.type == "CAMERA" and getattr(o, "fp_cam_render", True)),
+            key=lambda o: o.name.lower())
+        if not cameras:
+            self.report({'ERROR'}, "No cameras checked")
+            return {'CANCELLED'}
+
+        root = bpy.path.abspath("//svg_exports")
+        os.makedirs(root, exist_ok=True)
+        opts = SvgOptions.from_scene(scene)
+        objs = target_objects(context)
+
+        original = scene.camera
+        done, failed = 0, []
+        try:
+            for index, camera in enumerate(cameras, start=1):
+                scene.camera = camera
+                context.view_layer.update()
+                safe = re.sub(r'[\\/:*?"<>|]', "_", camera.name)
+                out = os.path.join(root, f"{index:02d}_{safe}.svg")
+                try:
+                    export_svg(context, out, opts, objs)
+                    done += 1
+                except RuntimeError as exc:
+                    # 1台こけても残りは出す。どれが駄目だったかは報告する
+                    logger.exception("SVG export failed for %s", camera.name)
+                    failed.append(f"{camera.name}: {exc}")
+        finally:
+            scene.camera = original
+            context.view_layer.update()
+
+        if failed:
+            self.report({'WARNING'},
+                        f"{done}/{len(cameras)} cameras -> {root} "
+                        f"({len(failed)} failed: {failed[0]})")
+        else:
+            self.report({'INFO'}, f"{done} cameras -> {root}")
         return {'FINISHED'}

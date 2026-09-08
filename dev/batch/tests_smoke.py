@@ -2200,6 +2200,103 @@ def t57():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@test("SVG: one file per layer, all sharing the same page transform")
+def t58():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        opts = svg_export.SvgOptions(depth_res=400, layers="SOURCE",
+                                     split_files=True)
+        st = svg_export.export_svg(bpy.context, str(tmp / "pen.svg"), opts)
+
+        files = st["files"]
+        assert len(files) == len(st["layers"]), (
+            f"層の数とファイル数が違う: {len(files)} vs {len(st['layers'])}")
+        for f in files:
+            assert Path(f).exists(), f"{f} が無い"
+            assert Path(f).stem.startswith("pen_"), f"名前が違う: {f}"
+
+        # ばらしても合計は1枚のときと同じでなければならない
+        merged = svg_export.export_svg(
+            bpy.context, str(tmp / "one.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="SOURCE",
+                                  split_files=False))
+        assert st["paths"] == merged["paths"], (
+            f"ばらすと本数が変わった: {merged['paths']} -> {st['paths']}")
+
+        # 位置合わせ: 全ファイルを合わせた範囲が1枚のときと一致すること
+        each = [_svg_bbox(Path(f).read_text(encoding="utf-8"))
+                for f in files]
+        lo_x = min(b[0] for b in each); lo_y = min(b[1] for b in each)
+        hi_x = max(b[2] for b in each); hi_y = max(b[3] for b in each)
+        ref = _svg_bbox((tmp / "one.svg").read_text(encoding="utf-8"))
+        for got, want in zip((lo_x, lo_y, hi_x, hi_y), ref):
+            assert abs(got - want) < 1e-3, (
+                f"層ごとのファイルが紙の上でずれている: {got} vs {want}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: presets set the scene properties they name")
+def t59():
+    from freepencil2 import svg_export
+
+    bpy.ops.wm.read_homefile(use_empty=True)
+    scene = bpy.context.scene
+    for key, spec in svg_export.SVG_PRESETS.items():
+        res = bpy.ops.freepencil.svg_preset(preset=key)
+        assert res == {"FINISHED"}, res
+        for name, want in spec["values"].items():
+            got = getattr(scene, name)
+            if isinstance(want, float):
+                assert abs(got - want) < 1e-6, f"{key}/{name}: {got} != {want}"
+            else:
+                assert got == want, f"{key}/{name}: {got} != {want}"
+
+
+@test("SVG: camera batch writes one file per checked camera and restores")
+def t60():
+    import shutil
+    import tempfile
+
+    _svg_scene()
+    scene = bpy.context.scene
+    first = scene.camera
+
+    cam_data = bpy.data.cameras.new("FP_Cam2")
+    second = bpy.data.objects.new("FP_Cam2", cam_data)
+    scene.collection.objects.link(second)
+    second.location = (0.0, -6.0, 1.0)
+    second.rotation_euler = (1.4, 0.0, 0.0)
+
+    tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
+    try:
+        # //svg_exports を使うので .blend を保存しておく必要がある
+        blend = tmp / "scene.blend"
+        bpy.ops.wm.save_as_mainfile(filepath=str(blend))
+        scene = bpy.context.scene
+        scene.fp_svg_depth_res = 320
+
+        res = bpy.ops.freepencil.export_svg_cameras()
+        assert res == {"FINISHED"}, res
+
+        out = Path(bpy.path.abspath("//svg_exports"))
+        svgs = sorted(out.glob("*.svg"))
+        assert len(svgs) == 2, f"カメラの数だけ出ていない: {[f.name for f in svgs]}"
+        assert svgs[0].name.startswith("01_"), svgs[0].name
+
+        assert bpy.context.scene.camera == first or \
+            bpy.context.scene.camera.name == first.name, (
+                "元のカメラに戻っていない")
+    finally:
+        bpy.ops.wm.read_homefile(use_empty=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     print("[tests] FreePencil smoke tests")
     fp_batch.install_addon()

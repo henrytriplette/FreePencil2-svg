@@ -107,10 +107,29 @@
   in the panel afterwards (12.8 to 17.1 minutes for the measured model).
   Acceleration is not modelled.
 
+- **Drawing bounds is now the default fit**, so the margin is predictable
+  and the merge tolerance stays honest against the pen width regardless of
+  how the shot is framed.
+
+- **One SVG per layer**, for sending each to a different pen. The page
+  transform is computed once across all layers and shared by every file, so
+  they line up when loaded separately - computing it per file would shift
+  the layers apart.
+
+- **Presets** (`Fine pen`, `Bold outline, 2 pens`, `Quick draft`) and a
+  **camera batch** that writes `//svg_exports/NN_<camera>.svg` for the same
+  camera ticks STEP5 uses. A camera that fails does not stop the others;
+  the failures are reported.
+
+- The SVG panel is split into three: the parent holds what is touched every
+  time, with `Line sources` and `Advanced` as sub-panels. It had grown to
+  more than twenty properties in one column.
+
 ### Notes
 - The raster pipeline (STEP0-STEP5) is unchanged and remains fully
   available; only the panel order puts SVG export first.
-- Eighteen regression tests cover the SVG path (57 total, was 39), including
+- Twenty-one regression tests cover the SVG path (60 total, was 39),
+  including
   one that pins the pen starting outside the drawing - a case where
   `linesort` previously became a silent no-op.
 

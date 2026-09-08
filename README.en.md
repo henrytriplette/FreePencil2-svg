@@ -68,6 +68,10 @@ The output can be split into SVG layers (`Single layer` / `By line source` /
 `By object`). vpype and Inkscape read these, so you can assign a different pen
 to each.
 
+Layers can also be written as **separate files** (`<name>_<layer>.svg`). The
+page transform is computed once across all layers and shared, so the files
+line up when loaded separately.
+
 Chaining and draw-order sorting stay inside a layer, so splitting increases
 both the path count and the pen travel (measured: 3286 paths / 2997 mm ->
 5210 / 6434 by source, 5627 / 7583 by object). If you do not need separate
@@ -105,12 +109,25 @@ it again after changing a setting.
 | Camera frame | keeps the composition; a small subject stays small on paper |
 | Drawing bounds | fits what was actually drawn to the page, so the margin is constant |
 
-**Drawing bounds is the one to prefer.** Beyond a predictable margin, it makes
+Drawing bounds is the default. Beyond a predictable margin, it makes
 the merge tolerance (in mm) behave honestly against the drawing. When the
 drawing is small on the page, unrelated ends fall inside the tolerance and
 only the path count goes down. Measured: 162x125 mm and 3286 paths by camera
 frame, 246x190 mm and 3802 paths by drawing bounds - the latter is the count
-you actually get at that pen size.
+you actually get at that pen size. Choose the camera frame only when you want
+the composition reproduced on the paper as-is.
+
+### Presets and camera batch
+
+**Preset** at the top of the panel holds the usual combinations (`Fine pen`,
+`Bold outline, 2 pens`, `Quick draft`).
+
+**Export checked cameras** writes `//svg_exports/NN_<camera>.svg` for every
+camera ticked in STEP5 (the .blend must be saved). If one camera fails the
+rest are still written, and the failure is reported.
+
+The settings are split across three panels: what you touch every time is in
+the parent, with line sources and the finer settings in their own sub-panels.
 
 ### Plot time estimate
 

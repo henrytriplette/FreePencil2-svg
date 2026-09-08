@@ -563,7 +563,14 @@ def register_props():
                  "Fit what was actually drawn to the page, so the margin is "
                  "the same whatever the framing"),
             ],
-            default='CAMERA'
+            default='DRAWING'
+        ),
+        "fp_svg_split_files": BoolProperty(
+            name="One file per layer",
+            description=("With layers on, write a separate SVG per layer so "
+                         "each can go to a different pen. All files share "
+                         "one page transform, so they line up"),
+            default=False
         ),
         "fp_svg_preview": BoolProperty(
             name="Preview in viewport",
@@ -678,7 +685,8 @@ def unregister_props():
         "fp_svg_src_open", "fp_svg_src_silhouette", "fp_svg_respect_paint",
         "fp_svg_layers", "fp_svg_outline_layer", "fp_svg_outline_gap",
         "fp_svg_fit", "fp_svg_preview", "fp_svg_plot_speed",
-        "fp_svg_travel_speed", "fp_svg_pen_lift", "fp_svg_last_result"
+        "fp_svg_travel_speed", "fp_svg_pen_lift", "fp_svg_last_result",
+        "fp_svg_split_files"
     ]
     
     for prop_name in props_to_clear:
