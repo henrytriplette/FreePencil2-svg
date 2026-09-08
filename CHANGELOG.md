@@ -136,11 +136,25 @@
   Found by installing 5.2.1 and running the suite; the export is now
   verified there.
 
+- **STEP3 failed on Blender 5.x with the default node type.** `fp_node_type`
+  defaults to `test`, and the 4.x script for that group assigned to
+  `CompositorNodeFilter.inputs[0]`. The sockets were reordered in 5.x
+  (4.x: `Fac, Image`; 5.x: `Image, Factor, Type`), so that assignment hit
+  the RGBA image socket and raised `TypeError` - and the image link, also
+  written by index, would have gone to `Factor`.
+
+  Fixed by adding `Exported_FreePencil_v1_1_0_test_5x.py`, built the way
+  `utils_nodegroup` documents and `pro_5x` already was: create the group on
+  4.5, open the file in 5.2 so Blender migrates it, export the result. The
+  4.x script is untouched, so 4.x behaviour cannot change. Pre-existing
+  since v2.5.0.
+
 ### Notes
 - The raster pipeline (STEP0-STEP5) is unchanged and remains fully
   available; only the panel order puts SVG export first.
-- Twenty-one regression tests cover the SVG path (60 total, was 39). All
-  60 pass on both 4.5.6 and 5.2.1, and the two produce byte-identical
+- Twenty-one regression tests cover the SVG path (61 total, was 39),
+  plus one that builds every node group type on the running Blender. All
+  61 pass on both 4.5.6 and 5.2.1, and the two produce byte-identical
   vector output on a 1,047,642-face model (683165 edges, 6322 paths,
   43542.4 mm drawn, 11263.2 mm travel, same layer split). Included
   one that pins the pen starting outside the drawing - a case where

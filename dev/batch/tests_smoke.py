@@ -1817,11 +1817,6 @@ def t47():
     from freepencil2 import svg_export, compat
 
     _svg_scene()
-    # ノード種別は明示する。既定の 'test' 用スクリプトは 5.x で
-    # CompositorNodeFilter の inputs[0] に代入して落ちる(既知・別件)。
-    # このテストの主題は「書き出しがツリーを触らないこと」なので、
-    # 生成できる側で確かめる
-    bpy.context.scene.fp_node_type = 'pro'
     bpy.ops.freepencil4.link_button()
     bpy.ops.freepencil2.link_button()
     scene = bpy.context.scene
@@ -2300,6 +2295,44 @@ def t60():
     finally:
         bpy.ops.wm.read_homefile(use_empty=True)
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("STEP3 builds a node group for every node type on this Blender")
+def t61():
+    """5.x では 'test' 用スクリプトが CompositorNodeFilter の添字違いで
+    落ちていた(4.x は Fac,Image / 5.x は Image,Factor,Type)。Blender に
+    移行させた _5x スクリプトを足して直したので、両方の種別で作れることを
+    ここで固定する。"""
+    from freepencil2 import fp_core
+
+    for node_type in ("test", "pro"):
+        bpy.ops.wm.read_homefile(use_empty=True)
+        bpy.ops.mesh.primitive_cube_add()
+        objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+        fp_batch.apply_white_material(objs)
+        fp_batch.select_meshes()
+        bpy.ops.freepencil.auto_vertex_color()
+
+        scene = bpy.context.scene
+        scene.fp_node_type = node_type
+        assert bpy.ops.freepencil4.link_button() == {"FINISHED"}
+        assert bpy.ops.freepencil2.link_button() == {"FINISHED"}
+
+        name = f"{fp_core.NODE_GROUP_PREFIX}{node_type}"
+        ng = bpy.data.node_groups.get(name)
+        assert ng is not None, f"{name} が作られていない"
+        assert len(ng.nodes) > 0, f"{name} が空"
+        assert len(ng.links) > 0, f"{name} にリンクが無い"
+
+        # Filter のソケットは添字ではなく名前で解決されているか。
+        # 画像入力が繋がっていなければ、線が出ない状態で生成されている
+        for n in ng.nodes:
+            if n.bl_idname == "CompositorNodeFilter":
+                img = n.inputs.get("Image")
+                assert img is not None, "Filter に Image 入力が無い"
+                assert img.is_linked, (
+                    f"{node_type}: Filter の Image が繋がっていない"
+                    f"(添字で繋いで別ソケットへ行った可能性)")
 
 
 def main():
