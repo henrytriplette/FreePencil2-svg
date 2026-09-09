@@ -138,6 +138,16 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         col.prop(scene, "fpm_svg_hatch_threshold", text=t("Hatch threshold"))
 
         col = layout.column(align=True)
+        col.label(text=t("Tiling"))
+        row = col.row(align=True)
+        row.prop(scene, "fpm_svg_tile_cols", text=t("Columns"))
+        row.prop(scene, "fpm_svg_tile_rows", text=t("Rows"))
+        sub = col.row(align=True)
+        sub.enabled = (scene.fpm_svg_tile_cols > 1
+                       or scene.fpm_svg_tile_rows > 1)
+        sub.prop(scene, "fpm_svg_tile_marks", text=t("Registration marks"))
+
+        col = layout.column(align=True)
         col.label(text=t("Hand jitter"))
         col.prop(scene, "fpm_svg_jitter", text=t("Jitter (mm)"))
         sub = col.column(align=True)

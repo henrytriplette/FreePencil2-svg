@@ -771,3 +771,27 @@ msgstr "手ぶれのシード"
 msgctxt "*"
 msgid "Export frame range"
 msgstr "フレーム範囲を書き出す"
+
+msgctxt "*"
+msgid "Tiling"
+msgstr "複数枚に分ける"
+
+msgctxt "*"
+msgid "Columns"
+msgstr "列"
+
+msgctxt "*"
+msgid "Rows"
+msgstr "行"
+
+msgctxt "*"
+msgid "Registration marks"
+msgstr "トンボ"
+
+msgctxt "*"
+msgid "Tile columns"
+msgstr "分割する列数"
+
+msgctxt "*"
+msgid "Tile rows"
+msgstr "分割する行数"

@@ -2539,6 +2539,101 @@ def t67():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _svg_lines_of(path):
+    import re
+    import numpy as np
+    text = Path(path).read_text(encoding="utf-8")
+    return [np.array([[float(v) for v in q.split(",")]
+                      for q in m.group(1).split()])
+            for m in re.finditer(r'points="([^"]+)"', text)]
+
+
+def _drawn(lines):
+    import numpy as np
+    return sum(float(np.hypot(*(p[1:] - p[:-1]).T).sum()) for p in lines)
+
+
+@test("SVG: clipping a polyline keeps its length and lands on the border")
+def t68():
+    import numpy as np
+    from freepencil2 import svg_export
+
+    # 矩形をまたぐ一本。切ったら2本になり、切り口は境界の上にあること
+    line = np.array([[-10.0, 5.0], [30.0, 5.0]])
+    pieces = svg_export.clip_polyline(line, 0.0, 0.0, 10.0, 10.0)
+    assert len(pieces) == 1, f"1本に切れるはず: {len(pieces)}"
+    got = pieces[0]
+    assert abs(got[0][0] - 0.0) < 1e-9 and abs(got[-1][0] - 10.0) < 1e-9, got
+    assert abs(_drawn(pieces) - 10.0) < 1e-9
+
+    # 完全に外なら何も残らない
+    assert svg_export.clip_polyline(
+        np.array([[20.0, 20.0], [30.0, 30.0]]), 0.0, 0.0, 10.0, 10.0) == []
+
+    # 完全に内なら長さが変わらない
+    inside = np.array([[1.0, 1.0], [9.0, 9.0]])
+    kept = svg_export.clip_polyline(inside, 0.0, 0.0, 10.0, 10.0)
+    assert abs(_drawn(kept) - _drawn([inside])) < 1e-9
+
+
+@test("SVG: tiling writes cols x rows sheets and keeps the total length")
+def t69():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fpm_svg_"))
+    try:
+        opts = svg_export.SvgOptions(depth_res=400, tile_cols=2, tile_rows=2,
+                                     tile_marks=False)
+        st = svg_export.export_svg(bpy.context, str(tmp / "t.svg"), opts)
+
+        assert st["tiles"] == [2, 2], st.get("tiles")
+        names = sorted(Path(f).name for f in st["files"])
+        assert names == ["t_r1c1.svg", "t_r1c2.svg",
+                         "t_r2c1.svg", "t_r2c2.svg"], names
+
+        # 切っても描く長さは変わらない。継ぎ目で線が落ちていない証拠になる
+        total = sum(_drawn(_svg_lines_of(f)) for f in st["files"])
+        assert abs(total - st["draw_mm"]) < 0.5, (
+            f"タイルの合計 {total:.1f} が合成の {st['draw_mm']:.1f} と違う")
+
+        # 紙は1枚ぶんのまま。絵は紙を並べた大きさに合わせる
+        assert st["page_mm"] == [297.0, 210.0], st["page_mm"]
+        assert st["canvas_mm"] == [594.0, 420.0], st["canvas_mm"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: registration marks follow their toggle")
+def t70():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fpm_svg_"))
+    try:
+        on = svg_export.export_svg(
+            bpy.context, str(tmp / "on.svg"),
+            svg_export.SvgOptions(depth_res=400, tile_cols=2, tile_rows=1,
+                                  tile_marks=True))
+        off = svg_export.export_svg(
+            bpy.context, str(tmp / "off.svg"),
+            svg_export.SvgOptions(depth_res=400, tile_cols=2, tile_rows=1,
+                                  tile_marks=False))
+        # 1枚あたり四隅 x 2本
+        extra = _drawn(_svg_lines_of(on["files"][0])) \
+            - _drawn(_svg_lines_of(off["files"][0]))
+        assert abs(extra - 8 * 6.0) < 1e-6, f"トンボの長さが合わない: {extra}"
+
+        marks = svg_export.registration_marks(297.0, 210.0)
+        assert len(marks) == 8, len(marks)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     print("[tests] FreePencil smoke tests")
     fp_batch.install_addon()

@@ -577,6 +577,23 @@ def register_props():
                          "pen width. Lower = more depth cueing"),
             default=0.6, min=0.1, max=1.0
         ),
+        "fpm_svg_tile_cols": IntProperty(
+            name="Tile columns",
+            description=("Split the drawing across this many sheets "
+                         "horizontally. 1 = no tiling"),
+            default=1, min=1, max=6
+        ),
+        "fpm_svg_tile_rows": IntProperty(
+            name="Tile rows",
+            description=("Split the drawing across this many sheets "
+                         "vertically. 1 = no tiling"),
+            default=1, min=1, max=6
+        ),
+        "fpm_svg_tile_marks": BoolProperty(
+            name="Registration marks",
+            description="Add corner marks to each sheet for lining them up",
+            default=True
+        ),
         "fpm_svg_jitter": FloatProperty(
             name="Hand jitter",
             description=("Wobble the lines by this much (mm) so they read as "
@@ -748,6 +765,7 @@ def unregister_props():
         "fpm_svg_hatch_spacing", "fpm_svg_hatch_levels",
         "fpm_svg_hatch_angle", "fpm_svg_hatch_threshold",
         "fpm_svg_jitter", "fpm_svg_jitter_scale", "fpm_svg_jitter_seed",
+        "fpm_svg_tile_cols", "fpm_svg_tile_rows", "fpm_svg_tile_marks",
         "fpm_svg_fit", "fpm_svg_preview", "fpm_svg_plot_speed",
         "fpm_svg_travel_speed", "fpm_svg_pen_lift", "fpm_svg_last_result",
         "fpm_svg_split_files"

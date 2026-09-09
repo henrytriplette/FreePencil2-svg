@@ -690,3 +690,27 @@ msgstr "Jitter seed"
 msgctxt "*"
 msgid "Export frame range"
 msgstr "Export frame range"
+
+msgctxt "*"
+msgid "Tiling"
+msgstr "Tiling"
+
+msgctxt "*"
+msgid "Columns"
+msgstr "Columns"
+
+msgctxt "*"
+msgid "Rows"
+msgstr "Rows"
+
+msgctxt "*"
+msgid "Registration marks"
+msgstr "Registration marks"
+
+msgctxt "*"
+msgid "Tile columns"
+msgstr "Tile columns"
+
+msgctxt "*"
+msgid "Tile rows"
+msgstr "Tile rows"

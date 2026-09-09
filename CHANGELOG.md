@@ -1,5 +1,26 @@
 # FreePencil2 - Changelog
 
+## [2.11.0] - 2026-09-09
+### Added
+- **Tiling across sheets**, for plotting a drawing larger than the bed.
+  The drawing is fitted to the composite size (columns x page by rows x
+  page) and cut into page-sized sheets written as `<name>_r1c1.svg` etc.
+
+  Merging, simplification, jitter and draw-order sorting run **once on the
+  composite** before cutting; doing them per sheet would make the lines
+  disagree across a seam. Verified that clipping preserves drawn length
+  exactly - 5588.4 mm across four sheets against 5588.4 mm on the
+  composite - so nothing is lost or doubled at a join.
+
+  Registration marks (on by default) are added to every sheet. The margin
+  applies to the composite rather than each sheet, so content reaches an
+  inner seam, which is what makes the join continuous.
+
+### Changed
+- `build_svg` split into `prepare_layers` (transform, merge, simplify,
+  jitter, sort) and `svg_document` (serialise), so tiling can prepare once
+  and serialise many times. Behaviour is unchanged.
+
 ## [2.10.0] - 2026-09-09
 ### Added
 - **Hand jitter** (off by default). Wobbles the lines so they read as drawn

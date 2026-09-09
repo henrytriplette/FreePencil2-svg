@@ -93,7 +93,8 @@ class SvgOptions:
                  "fit", "plot_speed", "travel_speed", "pen_lift",
                  "split_files", "depth_bands", "depth_weight",
                  "hatch", "hatch_spacing", "hatch_levels", "hatch_angle",
-                 "hatch_threshold", "jitter", "jitter_scale", "jitter_seed")
+                 "hatch_threshold", "jitter", "jitter_scale", "jitter_seed",
+                 "tile_cols", "tile_rows", "tile_marks")
 
     def __init__(self, page="A4", margin=10.0, pen=0.3, merge_tolerance=0.1,
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
@@ -104,7 +105,11 @@ class SvgOptions:
                  split_files=False, depth_bands=3, depth_weight=0.6,
                  hatch=False, hatch_spacing=1.2, hatch_levels=2,
                  hatch_angle=45.0, hatch_threshold=0.5,
-                 jitter=0.0, jitter_scale=8.0, jitter_seed=1.0):
+                 jitter=0.0, jitter_scale=8.0, jitter_seed=1.0,
+                 tile_cols=1, tile_rows=1, tile_marks=True):
+        self.tile_cols = tile_cols
+        self.tile_rows = tile_rows
+        self.tile_marks = tile_marks
         self.jitter = jitter
         self.jitter_scale = jitter_scale
         self.jitter_seed = jitter_seed
@@ -180,6 +185,9 @@ class SvgOptions:
             jitter=g(scene, "fpm_svg_jitter", 0.0),
             jitter_scale=g(scene, "fpm_svg_jitter_scale", 8.0),
             jitter_seed=float(g(scene, "fpm_svg_jitter_seed", 1)),
+            tile_cols=g(scene, "fpm_svg_tile_cols", 1),
+            tile_rows=g(scene, "fpm_svg_tile_rows", 1),
+            tile_marks=g(scene, "fpm_svg_tile_marks", True),
         )
 
 
@@ -1198,6 +1206,153 @@ def estimate_seconds(draw_mm: float, pen_up_mm: float, paths: int,
             + paths * opts.pen_lift)
 
 
+def clip_polyline(pts: np.ndarray, x0: float, y0: float,
+                  x1: float, y1: float) -> list:
+    """折れ線を矩形で切り、内側に残った連続部分を返す。
+
+    紙をまたぐ線は切った先で必ず紙の縁に届いていないといけない。線分ごとに
+    Liang-Barsky で切り、続いている限り1本の折れ線としてつなぎ直す。
+    """
+    out, cur = [], []
+
+    def flush():
+        if len(cur) >= 2:
+            out.append(np.array(cur))
+        cur.clear()
+
+    for a, b in zip(pts[:-1], pts[1:]):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        t0, t1 = 0.0, 1.0
+        ok = True
+        for p, q in ((-dx, a[0] - x0), (dx, x1 - a[0]),
+                     (-dy, a[1] - y0), (dy, y1 - a[1])):
+            if p == 0.0:
+                if q < 0.0:
+                    ok = False
+                    break
+                continue
+            r = q / p
+            if p < 0.0:
+                if r > t1:
+                    ok = False
+                    break
+                t0 = max(t0, r)
+            else:
+                if r < t0:
+                    ok = False
+                    break
+                t1 = min(t1, r)
+        if not ok or t1 <= t0:
+            flush()
+            continue
+        pa = np.array([a[0] + dx * t0, a[1] + dy * t0])
+        pb = np.array([a[0] + dx * t1, a[1] + dy * t1])
+        if cur and np.hypot(*(np.array(cur[-1]) - pa)) > 1e-9:
+            flush()
+        if not cur:
+            cur.append(pa)
+        cur.append(pb)
+    flush()
+    return out
+
+
+def registration_marks(page_w: float, page_h: float,
+                       size: float = 6.0, inset: float = 3.0) -> list:
+    """四隅のトンボ。貼り合わせるときの位置合わせに使う。"""
+    marks = []
+    for cx, sx in ((inset, 1.0), (page_w - inset, -1.0)):
+        for cy, sy in ((inset, 1.0), (page_h - inset, -1.0)):
+            marks.append(np.array([[cx, cy], [cx + sx * size, cy]]))
+            marks.append(np.array([[cx, cy], [cx, cy + sy * size]]))
+    return marks
+
+
+def prepare_layers(groups, transform, opts: SvgOptions) -> tuple:
+    """ピクセル座標の折れ線を紙(mm)に移し、結合・間引き・揺らぎ・並べ替え
+    まで済ませる。タイル分割はこの後の切り出しでやるので、ここは1回だけ
+    通す(タイルごとにやり直すと継ぎ目で結果が食い違う)。"""
+    scale, off_x, off_y = transform
+    prepared = {}
+    stats = {"paths_raw": sum(len(v) for v in groups.values()), "layers": {},
+             "_points": 0, "_paths": 0, "_pen_up": 0.0, "_draw_mm": 0.0,
+             "_merged": 0}
+
+    for name in _layer_order(groups.keys()):
+        mm_lines = []
+        for pl in groups[name]:
+            mm = np.empty_like(pl)
+            mm[:, 0] = off_x + pl[:, 0] * scale
+            mm[:, 1] = off_y + pl[:, 1] * scale
+            mm_lines.append(mm)
+
+        # つないでから間引く。逆にすると継ぎ目で折れが残る
+        merged = linemerge(mm_lines, opts.merge_tolerance)
+        stats["_merged"] += len(merged)
+        lines = [x for x in (rdp(ln, opts.simplify) for ln in merged)
+                 if len(x) >= 2]
+        # 揺らすのは間引いた後。先にやると RDP がならして消してしまう
+        lines = jitter_lines(lines, opts)
+        if opts.sort:
+            lines = linesort(lines)
+
+        prepared[name] = lines
+        stats["layers"][name] = len(lines)
+        stats["_paths"] += len(lines)
+        stats["_points"] += sum(len(x) for x in lines)
+        stats["_pen_up"] += pen_up_travel(lines)
+        stats["_draw_mm"] += drawn_length(lines)
+    return prepared, stats
+
+
+def svg_document(prepared, page_w: float, page_h: float,
+                 opts: SvgOptions) -> str:
+    """用意済みの mm 折れ線を SVG 文字列にする。"""
+    body = []
+    for i, name in enumerate(_layer_order(prepared.keys()), start=1):
+        rows = []
+        for mm in prepared[name]:
+            coords = " ".join(f"{x:.3f},{y:.3f}" for x, y in mm)
+            rows.append(f'<polyline points="{coords}"/>')
+        if not rows:
+            continue
+        if opts.layers == "NONE" and name in ("lines", "hatch"):
+            attrs = ""
+        else:
+            # vpype と Inkscape はこの2属性でレイヤーとして読む
+            attrs = (f' inkscape:groupmode="layer" inkscape:label="{name}"'
+                     f' id="layer{i}"')
+        body.append(
+            f'<g{attrs} fill="none" stroke="#000000"'
+            f' stroke-width="{layer_pen(name, opts):.4g}"\n'
+            '   stroke-linecap="round" stroke-linejoin="round">\n'
+            + "\n".join(rows) + "\n</g>")
+
+    ns = ("" if opts.layers == "NONE"
+          else f'\n     xmlns:inkscape="{INKSCAPE_NS}"')
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            f'<svg xmlns="http://www.w3.org/2000/svg" version="1.1"{ns}\n'
+            f'     width="{page_w}mm" height="{page_h}mm"\n'
+            f'     viewBox="0 0 {page_w} {page_h}">\n'
+            + "\n".join(body) + "\n</svg>\n")
+
+
+def tile_layers(prepared, page_w: float, page_h: float, col: int, row: int,
+                opts: SvgOptions) -> dict:
+    """1枚ぶんを切り出して、その紙の原点へ寄せる。"""
+    x0, y0 = col * page_w, row * page_h
+    out = {}
+    for name, lines in prepared.items():
+        cut = []
+        for ln in lines:
+            for piece in clip_polyline(ln, x0, y0, x0 + page_w, y0 + page_h):
+                cut.append(piece - np.array([x0, y0]))
+        if cut:
+            out[name] = cut
+    if opts.tile_marks:
+        out["regmarks"] = registration_marks(page_w, page_h)
+    return out
+
+
 def build_svg(groups, width: int, height: int, opts: SvgOptions,
               transform=None) -> tuple:
     """レイヤーごとの折れ線を mm に移し、SVG 文字列と統計を返す。
@@ -1216,65 +1371,13 @@ def build_svg(groups, width: int, height: int, opts: SvgOptions,
                                     width, height, opts)
     scale, off_x, off_y = transform
 
-    raw_total = sum(len(v) for v in groups.values())
-    stats = {"paths_raw": raw_total, "layers": {}}
-
-    body = []
-    points = 0
-    paths = 0
-    pen_up = 0.0
-    draw_mm = 0.0
-    merged_total = 0
-
-    for i, name in enumerate(_layer_order(groups.keys()), start=1):
-        mm_lines = []
-        for pl in groups[name]:
-            mm = np.empty_like(pl)
-            mm[:, 0] = off_x + pl[:, 0] * scale
-            mm[:, 1] = off_y + pl[:, 1] * scale
-            mm_lines.append(mm)
-
-        # つないでから間引く。逆にすると継ぎ目で折れが残る
-        merged = linemerge(mm_lines, opts.merge_tolerance)
-        merged_total += len(merged)
-        lines = [s for s in (rdp(ln, opts.simplify) for ln in merged)
-                 if len(s) >= 2]
-        # 揺らすのは間引いた後。先にやると RDP がならして消してしまう
-        lines = jitter_lines(lines, opts)
-        if opts.sort:
-            lines = linesort(lines)
-        pen_up += pen_up_travel(lines)
-        draw_mm += drawn_length(lines)
-
-        rows = []
-        for mm in lines:
-            points += len(mm)
-            coords = " ".join(f"{x:.3f},{y:.3f}" for x, y in mm)
-            rows.append(f'<polyline points="{coords}"/>')
-        paths += len(rows)
-        stats["layers"][name] = len(rows)
-
-        if opts.layers == "NONE":
-            attrs = ""
-        else:
-            # vpype と Inkscape はこの2属性でレイヤーとして読む
-            attrs = (f' inkscape:groupmode="layer" inkscape:label="{name}"'
-                     f' id="layer{i}"')
-        body.append(
-            f'<g{attrs} fill="none" stroke="#000000"'
-            f' stroke-width="{layer_pen(name, opts):.4g}"\n'
-            '   stroke-linecap="round" stroke-linejoin="round">\n'
-            + "\n".join(rows) + "\n</g>")
-
-    ns = "" if opts.layers == "NONE" else f'\n     xmlns:inkscape="{INKSCAPE_NS}"'
-    svg = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        f'<svg xmlns="http://www.w3.org/2000/svg" version="1.1"{ns}\n'
-        f'     width="{page_w}mm" height="{page_h}mm"\n'
-        f'     viewBox="0 0 {page_w} {page_h}">\n'
-        + "\n".join(body)
-        + "\n</svg>\n"
-    )
+    prepared, stats = prepare_layers(groups, transform, opts)
+    svg = svg_document(prepared, page_w, page_h, opts)
+    points = stats.pop("_points")
+    paths = stats.pop("_paths")
+    pen_up = stats.pop("_pen_up")
+    draw_mm = stats.pop("_draw_mm")
+    merged_total = stats.pop("_merged")
     stats.update({"page_mm": [page_w, page_h], "paths": paths,
                   "paths_merged": merged_total, "points": points,
                   "pen_up_mm": round(pen_up, 1),
@@ -1321,9 +1424,15 @@ def export_svg(context, filepath: str, opts: SvgOptions,
     groups, stats = visible_polylines(collected, project, depth, opts, mode)
 
     page_w, page_h = page_mm(opts.page, width, height)
+    cols = max(1, int(opts.tile_cols))
+    rows = max(1, int(opts.tile_rows))
+    # タイルに分けるときは、まず「紙を並べた大きさ」に絵を合わせる。
+    # 合わせてから切るので、継ぎ目で線が食い違わない
+    canvas_w, canvas_h = page_w * cols, page_h * rows
     # 変換は線だけから決める。ハッチは絵の内側にしか出ないので、後から
     # 足しても紙に収まる範囲は変わらない
-    transform = _page_transform(groups, page_w, page_h, width, height, opts)
+    transform = _page_transform(groups, canvas_w, canvas_h,
+                                width, height, opts)
 
     if opts.hatch:
         # 間隔は紙の上の mm で指定してもらう。ピクセルに直すのに変換が要る
@@ -1335,7 +1444,31 @@ def export_svg(context, filepath: str, opts: SvgOptions,
 
     base = Path(filepath)
     written = []
-    if opts.split_files and opts.layers != "NONE" and len(groups) > 1:
+    if cols > 1 or rows > 1:
+        # 結合・間引き・並べ替えは合成した状態で1回だけ通し、そのあと
+        # 1枚ずつ切り出す。タイルごとにやり直すと継ぎ目で結果が変わる
+        prepared, svg_stats = prepare_layers(groups, transform, opts)
+        for row in range(rows):
+            for col in range(cols):
+                sheet = tile_layers(prepared, page_w, page_h, col, row, opts)
+                text = svg_document(sheet, page_w, page_h, opts)
+                out = base.with_name(
+                    f"{base.stem}_r{row + 1}c{col + 1}{base.suffix}")
+                out.write_text(text, encoding="utf-8")
+                written.append(str(out))
+        svg_stats["tiles"] = [cols, rows]
+        svg_stats["page_mm"] = [page_w, page_h]
+        svg_stats["canvas_mm"] = [canvas_w, canvas_h]
+        for k in ("_points", "_paths", "_pen_up", "_draw_mm", "_merged"):
+            v = svg_stats.pop(k)
+            key = {"_points": "points", "_paths": "paths",
+                   "_pen_up": "pen_up_mm", "_draw_mm": "draw_mm",
+                   "_merged": "paths_merged"}[k]
+            svg_stats[key] = round(v, 1) if isinstance(v, float) else v
+        svg_stats["estimated_seconds"] = round(estimate_seconds(
+            svg_stats["draw_mm"], svg_stats["pen_up_mm"],
+            svg_stats["paths"], opts), 1)
+    elif opts.split_files and opts.layers != "NONE" and len(groups) > 1:
         # ペンごとに1枚。位置を合わせるため変換は全層ぶんから作って共有する
         svg_stats = {"paths": 0, "points": 0, "paths_raw": 0,
                      "paths_merged": 0, "pen_up_mm": 0.0, "draw_mm": 0.0,

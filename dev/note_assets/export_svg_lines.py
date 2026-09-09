@@ -104,6 +104,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--hatch-levels", type=int, default=2)
     p.add_argument("--hatch-angle", type=float, default=45.0)
     p.add_argument("--hatch-threshold", type=float, default=0.5)
+    p.add_argument("--tile-cols", type=int, default=1,
+                   help="横に何枚に分けるか(1 で分割しない)")
+    p.add_argument("--tile-rows", type=int, default=1,
+                   help="縦に何枚に分けるか(1 で分割しない)")
+    p.add_argument("--no-tile-marks", action="store_true",
+                   help="トンボを打たない")
     p.add_argument("--jitter", type=float, default=0.0,
                    help="手ぶれの振幅(mm)。0 で無効")
     p.add_argument("--jitter-scale", type=float, default=8.0,
@@ -257,6 +263,8 @@ def main() -> None:
         hatch=args.hatch, hatch_spacing=args.hatch_spacing,
         hatch_levels=args.hatch_levels, hatch_angle=args.hatch_angle,
         hatch_threshold=args.hatch_threshold,
+        tile_cols=args.tile_cols, tile_rows=args.tile_rows,
+        tile_marks=not args.no_tile_marks,
         jitter=args.jitter, jitter_scale=args.jitter_scale,
         jitter_seed=float(args.jitter_seed),
         outline_gap=args.outline_gap, fit=args.fit,

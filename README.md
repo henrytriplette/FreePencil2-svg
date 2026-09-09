@@ -181,6 +181,23 @@ frame, 246x190 mm and 3802 paths by drawing bounds - the latter is the count
 you actually get at that pen size. Choose the camera frame only when you want
 the composition reproduced on the paper as-is.
 
+### Tiling across sheets
+
+Set **Columns** and **Rows** above 1 to plot a drawing larger than the bed.
+The drawing is fitted to the *composite* size (columns x page wide, rows x
+page tall) and then cut into sheets, each written at page size as
+`<name>_r1c1.svg` and so on.
+
+Merging, simplification, jitter and draw-order sorting all happen **once on
+the composite**, before cutting — doing them per sheet would make the lines
+disagree across a seam. Clipping preserves the drawn length exactly, so
+nothing is lost or doubled at the join.
+
+**Registration marks** (on by default) put corner marks on every sheet for
+lining them up. Note that the margin applies to the composite, not to each
+sheet, so content runs right up to an inner seam — that is what makes the
+join continuous.
+
 ### Hand jitter
 
 **Hand jitter** (0 = off) wobbles the lines so they read as drawn rather than
