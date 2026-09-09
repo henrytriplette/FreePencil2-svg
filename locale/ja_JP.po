@@ -715,3 +715,35 @@ msgstr "ペンの上下"
 msgctxt "*"
 msgid "Last export"
 msgstr "前回の書き出し"
+
+msgctxt "*"
+msgid "Depth bands"
+msgstr "深度の帯数"
+
+msgctxt "*"
+msgid "Far line weight"
+msgstr "一番奥の線幅"
+
+msgctxt "*"
+msgid "Hatching"
+msgstr "ハッチング"
+
+msgctxt "*"
+msgid "Hatch spacing"
+msgstr "ハッチの間隔"
+
+msgctxt "*"
+msgid "Hatch spacing (mm)"
+msgstr "ハッチの間隔 (mm)"
+
+msgctxt "*"
+msgid "Hatch levels"
+msgstr "ハッチの段数"
+
+msgctxt "*"
+msgid "Hatch angle"
+msgstr "ハッチの角度"
+
+msgctxt "*"
+msgid "Hatch threshold"
+msgstr "ハッチのしきい値"

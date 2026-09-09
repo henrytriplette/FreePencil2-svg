@@ -1,5 +1,33 @@
 # FreePencil2 - Changelog
 
+## [2.9.0] - 2026-09-09
+### Added
+- **Depth-cued line weight.** `Layers -> By depth` bands the drawing from
+  near to far so each band can take its own pen, and thins the stroke
+  width towards the far band so the depth reads in the SVG itself. The
+  band range is taken from the visible lines only - including hidden edges
+  pushed the range back and bunched everything visible into the near bands
+  (asking for 3 bands produced 2).
+
+- **Hatching from the diffuse light pass** (off by default), written as its
+  own `hatch` layer. Instead of clipping hatch lines to island outlines,
+  parallel lines are drawn across the page and cut against the light pass,
+  so they follow the silhouette and any holes for free. Levels add passes
+  at +45 degrees over progressively darker ranges, giving cross-hatching
+  in the darkest areas. It needs lit materials; the white preview only
+  swaps the compositor, so it can stay on.
+
+### Fixed
+- **The background was never detected in the depth pass.** EEVEE writes the
+  camera's `clip_end` (measured 1000.07) for background pixels, not the
+  1e10 that `BACKGROUND_Z` assumed, so every background test silently
+  failed. It had been harmless - background read as "very far", so
+  occlusion and the outline step test still gave the right answers - but
+  hatching depends on it directly and covered the whole page. The depth
+  pass now normalises background to infinity at read time. Verified no
+  change to existing output: the 1,047,642-face model produces identical
+  edges, paths, drawn length and travel.
+
 ## [2.8.2] - 2026-09-09
 ### Added
 - **Japanese translations for the SVG UI.** The whole new panel was

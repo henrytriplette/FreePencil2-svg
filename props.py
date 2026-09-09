@@ -565,6 +565,47 @@ def register_props():
             ],
             default='DRAWING'
         ),
+        "fpm_svg_depth_bands": IntProperty(
+            name="Depth bands",
+            description=("With layers by depth, how many bands to split the "
+                         "drawing into (nearest first)"),
+            default=3, min=2, max=5
+        ),
+        "fpm_svg_depth_weight": FloatProperty(
+            name="Far line weight",
+            description=("Stroke width of the farthest band, relative to the "
+                         "pen width. Lower = more depth cueing"),
+            default=0.6, min=0.1, max=1.0
+        ),
+        "fpm_svg_hatch": BoolProperty(
+            name="Hatching",
+            description=("Add hatching from the diffuse light pass, as its "
+                         "own layer. Needs lit materials: the shading comes "
+                         "from the render, not from the line art"),
+            default=False
+        ),
+        "fpm_svg_hatch_spacing": FloatProperty(
+            name="Hatch spacing",
+            description="Distance between hatch lines on the page (mm)",
+            default=1.2, min=0.1, max=20.0
+        ),
+        "fpm_svg_hatch_levels": IntProperty(
+            name="Hatch levels",
+            description=("Tone steps. Each step covers a darker range at a "
+                         "different angle, so dark areas end up cross-hatched"),
+            default=2, min=1, max=3
+        ),
+        "fpm_svg_hatch_angle": FloatProperty(
+            name="Hatch angle",
+            description="Angle of the first hatch level, in degrees",
+            default=45.0, min=0.0, max=180.0
+        ),
+        "fpm_svg_hatch_threshold": FloatProperty(
+            name="Hatch threshold",
+            description=("Hatch where the diffuse light is below this. "
+                         "Higher = more of the model gets toned"),
+            default=0.5, min=0.0, max=1.0
+        ),
         "fpm_svg_split_files": BoolProperty(
             name="One file per layer",
             description=("With layers on, write a separate SVG per layer so "
@@ -610,6 +651,8 @@ def register_props():
                 ('SOURCE', "By line source",
                  "Silhouette, color separation, material, bone, open edges"),
                 ('OBJECT', "By object", "One layer per mesh object"),
+                ('DEPTH', "By depth",
+                 "Near to far, so each band can take a different pen"),
             ],
             default='NONE'
         ),
@@ -684,6 +727,9 @@ def unregister_props():
         "fpm_svg_src_mecha", "fpm_svg_src_material", "fpm_svg_src_bone",
         "fpm_svg_src_open", "fpm_svg_src_silhouette", "fpm_svg_respect_paint",
         "fpm_svg_layers", "fpm_svg_outline_layer", "fpm_svg_outline_gap",
+        "fpm_svg_depth_bands", "fpm_svg_depth_weight", "fpm_svg_hatch",
+        "fpm_svg_hatch_spacing", "fpm_svg_hatch_levels",
+        "fpm_svg_hatch_angle", "fpm_svg_hatch_threshold",
         "fpm_svg_fit", "fpm_svg_preview", "fpm_svg_plot_speed",
         "fpm_svg_travel_speed", "fpm_svg_pen_lift", "fpm_svg_last_result",
         "fpm_svg_split_files"

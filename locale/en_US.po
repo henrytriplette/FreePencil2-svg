@@ -634,3 +634,35 @@ msgstr "Pen lift"
 msgctxt "*"
 msgid "Last export"
 msgstr "Last export"
+
+msgctxt "*"
+msgid "Depth bands"
+msgstr "Depth bands"
+
+msgctxt "*"
+msgid "Far line weight"
+msgstr "Far line weight"
+
+msgctxt "*"
+msgid "Hatching"
+msgstr "Hatching"
+
+msgctxt "*"
+msgid "Hatch spacing"
+msgstr "Hatch spacing"
+
+msgctxt "*"
+msgid "Hatch spacing (mm)"
+msgstr "Hatch spacing (mm)"
+
+msgctxt "*"
+msgid "Hatch levels"
+msgstr "Hatch levels"
+
+msgctxt "*"
+msgid "Hatch angle"
+msgstr "Hatch angle"
+
+msgctxt "*"
+msgid "Hatch threshold"
+msgstr "Hatch threshold"

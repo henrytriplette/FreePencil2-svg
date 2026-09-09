@@ -122,6 +122,19 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         sub = col.row(align=True)
         sub.enabled = scene.fpm_svg_layers != "NONE"
         sub.prop(scene, "fpm_svg_split_files", text=t("One file per layer"))
+        sub = col.column(align=True)
+        sub.enabled = scene.fpm_svg_layers == "DEPTH"
+        sub.prop(scene, "fpm_svg_depth_bands", text=t("Depth bands"))
+        sub.prop(scene, "fpm_svg_depth_weight", text=t("Far line weight"))
+
+        box = layout.box()
+        box.prop(scene, "fpm_svg_hatch", text=t("Hatching"))
+        col = box.column(align=True)
+        col.enabled = scene.fpm_svg_hatch
+        col.prop(scene, "fpm_svg_hatch_spacing", text=t("Hatch spacing (mm)"))
+        col.prop(scene, "fpm_svg_hatch_levels", text=t("Hatch levels"))
+        col.prop(scene, "fpm_svg_hatch_angle", text=t("Hatch angle"))
+        col.prop(scene, "fpm_svg_hatch_threshold", text=t("Hatch threshold"))
 
         layout.operator(FP_OT_EXPORT_SVG.bl_idname,
                         text=t("Export SVG"), icon="EXPORT")

@@ -93,6 +93,39 @@ Each source can be switched on or off independently.
 path (`fpm_ch_bone` defaults to 1.0). On a plotter they add too many lines, so
 turn them on only if you want them.
 
+### Depth-cued line weight
+
+`Layers -> By depth` splits the drawing into bands from near to far, so each
+band can take a different pen. The stroke width of each band is thinned
+towards `Far line weight` as well, so the depth reads even when you just look
+at the SVG.
+
+The band range is taken from the **visible** lines only. Including hidden
+edges pushes the range further back and bunches everything visible into the
+near bands - measured on the demo scene, asking for 3 bands gave only 2 until
+this was fixed.
+
+### Hatching
+
+**Hatching** (off by default) adds tone from the render's diffuse light pass,
+as its own `hatch` layer so it can go to a different pen.
+
+It needs **lit materials**: the shading comes from the render, not from the
+line art. The add-on's white preview only swaps the compositor, never the
+materials, so it can stay on.
+
+Rather than clipping hatch lines to island outlines, parallel lines are drawn
+across the page and cut against the light pass, so they follow the silhouette
+and any holes for free. Each level covers a darker range at a different angle,
+so the darkest areas end up cross-hatched.
+
+| setting | what it does |
+|---|---|
+| Hatch spacing | distance between hatch lines on the page (mm) |
+| Hatch levels | tone steps; each adds a pass at +45 degrees |
+| Hatch angle | angle of the first level |
+| Hatch threshold | hatch where the light is below this |
+
 ### Layers (assigning pens)
 
 The output can be split into SVG layers (`Single layer` / `By line source` /

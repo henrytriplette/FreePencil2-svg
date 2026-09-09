@@ -84,7 +84,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ignore-paint", action="store_true",
                    help="STEP4 の mask_color / line_color を無視する")
     p.add_argument("--layers", default="NONE",
-                   choices=["NONE", "SOURCE", "OBJECT"],
+                   choices=["NONE", "SOURCE", "OBJECT", "DEPTH"],
                    help="SVG レイヤーへの分け方(ペンを分けるときに使う)")
     p.add_argument("--split-files", action="store_true",
                    help="レイヤーごとに別ファイルへ書く(ペンごとに1枚)")
@@ -92,6 +92,18 @@ def parse_args() -> argparse.Namespace:
                    help="外周を専用レイヤーに分けない")
     p.add_argument("--outline-gap", type=float, default=0.02,
                    help="外周と見なす深度の段差(相対)")
+    p.add_argument("--depth-bands", type=int, default=3,
+                   help="--layers DEPTH のときの帯の数")
+    p.add_argument("--depth-weight", type=float, default=0.6,
+                   help="一番奥の帯の線幅(ペン幅に対する比)")
+    p.add_argument("--hatch", action="store_true",
+                   help="拡散直接光からハッチングを作る。陰影が要るので"
+                        "白エミッションではなく白ディフューズを貼る")
+    p.add_argument("--hatch-spacing", type=float, default=1.2,
+                   help="ハッチの間隔(紙の上の mm)")
+    p.add_argument("--hatch-levels", type=int, default=2)
+    p.add_argument("--hatch-angle", type=float, default=45.0)
+    p.add_argument("--hatch-threshold", type=float, default=0.5)
     p.add_argument("--fit", default="DRAWING",
                    choices=["CAMERA", "DRAWING"],
                    help="紙への合わせ方。DRAWING は描いた範囲を紙いっぱいに")
@@ -114,6 +126,22 @@ def demo_scene(occluder: bool = True) -> None:
     direction = Vector((1.0, -1.0, 0.65)).normalized()
     bpy.ops.mesh.primitive_cube_add(size=1.1, location=direction * 1.35)
     bpy.context.active_object.rotation_euler = (0.3, 0.5, 0.2)
+
+
+def apply_white_diffuse(meshes) -> None:
+    """白いディフューズを1枚貼る。ハッチの元になる陰影を出すため。"""
+    mat = bpy.data.materials.new("FP_White_Diffuse")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    bsdf = nt.nodes.new("ShaderNodeBsdfDiffuse")
+    bsdf.inputs["Color"].default_value = (0.8, 0.8, 0.8, 1.0)
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    nt.links.new(bsdf.outputs[0], out.inputs["Surface"])
+    for o in meshes:
+        o.data.materials.clear()
+        o.data.materials.append(mat)
 
 
 def world_bbox_dims(obj) -> np.ndarray:
@@ -188,7 +216,12 @@ def main() -> None:
     rec["mesh_objects"] = len(objs)
     rec["faces_total"] = int(sum(len(o.data.polygons) for o in objs))
 
-    fp_batch.apply_white_material(objs)
+    if args.hatch:
+        # fp_batch の白マテリアルはエミッション = 陰影が出ない。
+        # ハッチは拡散直接光から作るので、ここだけディフューズにする
+        apply_white_diffuse(objs)
+    else:
+        fp_batch.apply_white_material(objs)
     scene.fpm_use_random_seed = False
     scene.fpm_color_seed = args.seed
 
@@ -215,6 +248,10 @@ def main() -> None:
     opts = svg_export.SvgOptions(
         sources=sources, respect_paint=not args.ignore_paint,
         layers=args.layers, outline_layer=not args.no_outline_layer,
+        depth_bands=args.depth_bands, depth_weight=args.depth_weight,
+        hatch=args.hatch, hatch_spacing=args.hatch_spacing,
+        hatch_levels=args.hatch_levels, hatch_angle=args.hatch_angle,
+        hatch_threshold=args.hatch_threshold,
         outline_gap=args.outline_gap, fit=args.fit,
         split_files=args.split_files,
         page=args.page, margin=args.margin, pen=args.pen,

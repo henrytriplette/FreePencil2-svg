@@ -70,6 +70,10 @@ LAYER_PRIORITY = ("outline", "silhouette", "mecha", "material",
 
 INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
 
+# 並べる順のヒント。ハッチは線より先に引く(下地なので)。深度帯は手前から
+_LAYER_ORDER_HINT = (("hatch",) + LAYER_PRIORITY
+                     + tuple(f"depth{i}" for i in range(1, 6)))
+
 # 用紙(mm)。長辺・短辺の順で持ち、向きは絵の縦横比から決める
 PAGE_SIZES = {
     "A5": (148.0, 210.0),
@@ -87,7 +91,9 @@ class SvgOptions:
                  "sort", "keep_hidden", "seed", "sources", "respect_paint",
                  "layers", "outline_layer", "outline_gap",
                  "fit", "plot_speed", "travel_speed", "pen_lift",
-                 "split_files")
+                 "split_files", "depth_bands", "depth_weight",
+                 "hatch", "hatch_spacing", "hatch_levels", "hatch_angle",
+                 "hatch_threshold")
 
     def __init__(self, page="A4", margin=10.0, pen=0.3, merge_tolerance=0.1,
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
@@ -95,8 +101,17 @@ class SvgOptions:
                  sources=None, respect_paint=True, layers="NONE",
                  outline_layer=True, outline_gap=0.02, fit="DRAWING",
                  plot_speed=80.0, travel_speed=200.0, pen_lift=0.12,
-                 split_files=False):
+                 split_files=False, depth_bands=3, depth_weight=0.6,
+                 hatch=False, hatch_spacing=1.2, hatch_levels=2,
+                 hatch_angle=45.0, hatch_threshold=0.5):
         self.split_files = split_files
+        self.depth_bands = depth_bands
+        self.depth_weight = depth_weight
+        self.hatch = hatch
+        self.hatch_spacing = hatch_spacing
+        self.hatch_levels = hatch_levels
+        self.hatch_angle = hatch_angle
+        self.hatch_threshold = hatch_threshold
         self.fit = fit
         self.plot_speed = plot_speed
         self.travel_speed = travel_speed
@@ -151,6 +166,13 @@ class SvgOptions:
             travel_speed=g(scene, "fpm_svg_travel_speed", 200.0),
             pen_lift=g(scene, "fpm_svg_pen_lift", 0.12),
             split_files=g(scene, "fpm_svg_split_files", False),
+            depth_bands=g(scene, "fpm_svg_depth_bands", 3),
+            depth_weight=g(scene, "fpm_svg_depth_weight", 0.6),
+            hatch=g(scene, "fpm_svg_hatch", False),
+            hatch_spacing=g(scene, "fpm_svg_hatch_spacing", 1.2),
+            hatch_levels=g(scene, "fpm_svg_hatch_levels", 2),
+            hatch_angle=g(scene, "fpm_svg_hatch_angle", 45.0),
+            hatch_threshold=g(scene, "fpm_svg_hatch_threshold", 0.5),
         )
 
 
@@ -404,7 +426,14 @@ class Projection:
 
 # ---------------------------------------------------------------- 深度
 def render_depth_pass(scene, cam, width: int, height: int) -> np.ndarray:
-    """Z パスを EXR に書かせて読み戻す。返り値は下原点の (H, W)。
+    """Z パスだけ要るときの入口。返り値は下原点の (H, W)。"""
+    depth, _ = render_passes(scene, cam, width, height, shade=False)
+    return depth
+
+
+def render_passes(scene, cam, width: int, height: int,
+                  shade: bool = False) -> tuple:
+    """Z パス(と必要なら拡散直接光)を EXR に書かせて読み戻す。
 
     ユーザーのコンポジタを壊さないよう、使い捨ての一時シーンを作って
     そこでレンダーする。オブジェクトは複製せずコレクションを参照する
@@ -429,7 +458,13 @@ def render_depth_pass(scene, cam, width: int, height: int) -> np.ndarray:
             tmp.eevee.taa_render_samples = 1
         except AttributeError:
             pass
-        tmp.view_layers[0].use_pass_z = True
+        vl = tmp.view_layers[0]
+        vl.use_pass_z = True
+        if shade:
+            # ハッチの濃さはこのパスから決める。白プレビューは
+            # コンポジタ側の切り替えでマテリアルに触らないので、
+            # プレビュー中でも実際の陰影がそのまま出る
+            vl.use_pass_diffuse_direct = True
 
         depth_dir.mkdir(parents=True, exist_ok=True)
         for old in depth_dir.glob("*.exr"):
@@ -456,11 +491,21 @@ def render_depth_pass(scene, cam, width: int, height: int) -> np.ndarray:
         compat.file_output_add_slot(fo, slot_name, file_format="OPEN_EXR",
                                     color_mode="BW")
         fo.format.color_depth = "32"
+        shade_sock = None
+        if shade:
+            shade_sock = compat.render_layer_socket(
+                rl, compat.DIFFUSE_DIRECT_SOCKETS)
+            if shade_sock is not None:
+                compat.file_output_add_slot(fo, "shade",
+                                            file_format="OPEN_EXR",
+                                            color_mode="BW")
         # 宛先は必ず名前で引く。5.x の File Output は名前付きスロットの
         # 後ろに空の追加用ソケットを持つので、inputs[-1] だとそちらへ
         # 繋がってしまい、レンダーしてもファイルが1つも書かれない
         # (fp_core も fo.inputs[slot_name] で繋いでいる)
         tree.links.new(sock, fo.inputs[slot_name])
+        if shade_sock is not None:
+            tree.links.new(shade_sock, fo.inputs["shade"])
 
         bpy.ops.render.render(scene=tmp.name, write_still=False)
 
@@ -468,15 +513,35 @@ def render_depth_pass(scene, cam, width: int, height: int) -> np.ndarray:
         if not written:
             raise RuntimeError(f"no depth EXR written to {depth_dir}")
 
-        img = bpy.data.images.load(str(written[-1]))
-        try:
-            img.colorspace_settings.name = "Non-Color"
-            w, h = img.size
-            buf = np.empty(w * h * img.channels, dtype=np.float32)
-            img.pixels.foreach_get(buf)
-            return buf.reshape(h, w, img.channels)[:, :, 0].astype(np.float64)
-        finally:
-            bpy.data.images.remove(img)
+        def _read(path):
+            img = bpy.data.images.load(str(path))
+            try:
+                img.colorspace_settings.name = "Non-Color"
+                w, h = img.size
+                buf = np.empty(w * h * img.channels, dtype=np.float32)
+                img.pixels.foreach_get(buf)
+                return buf.reshape(h, w, img.channels)[:, :, 0].astype(
+                    np.float64)
+            finally:
+                bpy.data.images.remove(img)
+
+        # スロット名がそのままファイル名の頭に付く
+        depth_file = next((p for p in written if p.name.startswith("depth")),
+                          written[-1])
+        shade_file = next((p for p in written if p.name.startswith("shade")),
+                          None)
+        depth_arr = _read(depth_file)
+
+        # EEVEE は背景に「無限」ではなくカメラの clip_end を書く
+        # (実測 1000.07)。BACKGROUND_Z との比較がすべてすり抜けるので、
+        # ここで無限大へ正規化して下流の背景判定を素直にする。
+        # Cycles は 1e10 を書くため、そちらはそのまま通る
+        far = float(getattr(cam.data, "clip_end", 0.0) or 0.0)
+        if far > 0.0:
+            depth_arr[depth_arr >= far * 0.999] = np.inf
+
+        return (depth_arr,
+                _read(shade_file) if shade_file is not None else None)
     finally:
         bpy.data.scenes.remove(tmp)
 
@@ -653,6 +718,88 @@ def contour_mask(data, project, depth, opts: SvgOptions,
     return out
 
 
+def edge_depths(data, project) -> np.ndarray:
+    """辺の中点までのカメラ距離。深度帯の割り当てに使う。"""
+    verts, edges = data["verts"], data["edges"]
+    if len(edges) == 0:
+        return np.zeros(0)
+    mid = 0.5 * (verts[edges[:, 0]] + verts[edges[:, 1]])
+    _x, _y, plane, _ray, _inside = project(mid)
+    return plane
+
+
+def depth_band_names(depths: np.ndarray, lo: float, hi: float,
+                     bands: int) -> np.ndarray:
+    """距離を手前から depth1..depthN へ振り分ける。
+
+    範囲は外れ値に引っ張られないよう百分位で決める(呼び出し側が渡す)。
+    """
+    if hi <= lo:
+        idx = np.zeros(len(depths), dtype=np.int64)
+    else:
+        t = (depths - lo) / (hi - lo)
+        idx = np.clip((t * bands).astype(np.int64), 0, bands - 1)
+    names = np.array([f"depth{i + 1}" for i in range(bands)])
+    return names[idx]
+
+
+def _line_runs(mask: np.ndarray):
+    """真が続く区間の (開始, 終了) を返す。終了は含まない。"""
+    if not mask.any():
+        return []
+    padded = np.concatenate(([False], mask, [False]))
+    cuts = np.flatnonzero(padded[1:] != padded[:-1])
+    return list(zip(cuts[0::2], cuts[1::2]))
+
+
+def hatch_lines(shade, depth, mm_per_px: float, width: int, height: int,
+                opts: SvgOptions) -> list:
+    """陰影パスから平行線でトーンを作る。返すのはピクセル座標の線分。
+
+    島ごとに多角形を作って線をクリップするのではなく、画面いっぱいに引いた
+    平行線を輝度で切り取る。形は陰影パスがそのまま持っているので、これで
+    シルエットにも穴にも勝手に沿う。濃いところほど段が重なって密になる。
+    """
+    if shade is None or opts.hatch_levels < 1:
+        return []
+
+    h, w = shade.shape
+    background = depth >= BACKGROUND_Z
+    spacing_px = max(opts.hatch_spacing / max(mm_per_px, 1e-9), 1.0)
+
+    out = []
+    corners = np.array([[0.0, 0.0], [width, 0.0],
+                        [0.0, height], [width, height]])
+    for level in range(int(opts.hatch_levels)):
+        # 濃い段ほど狭い範囲にしか乗らない。角度をずらしてクロスにする
+        thr = (opts.hatch_threshold * (opts.hatch_levels - level)
+               / opts.hatch_levels)
+        ang = np.radians(opts.hatch_angle + 45.0 * level)
+        d = np.array([np.cos(ang), np.sin(ang)])
+        n = np.array([-d[1], d[0]])
+
+        along = corners @ d
+        across = corners @ n
+        t = np.arange(along.min(), along.max(), 1.0)
+        if len(t) < 2:
+            continue
+
+        for off in np.arange(across.min(), across.max(), spacing_px):
+            pts = off * n + t[:, None] * d      # 上原点のピクセル座標
+            x, y = pts[:, 0], pts[:, 1]
+            inside = (x >= 0) & (x < width) & (y >= 0) & (y < height)
+            if not inside.any():
+                continue
+            col = np.clip(x.astype(np.int64), 0, w - 1)
+            row = np.clip((h - 1) - y.astype(np.int64), 0, h - 1)
+            keep = inside & ~background[row, col] & (shade[row, col] <= thr)
+            for a, b in _line_runs(keep):
+                if b - a < 2:
+                    continue
+                out.append(np.array([[x[a], y[a]], [x[b - 1], y[b - 1]]]))
+    return out
+
+
 def _layer_keys(data, opts: SvgOptions, n: int) -> np.ndarray:
     """辺ごとのレイヤー名。分けない場合は全部同じ名前になる。"""
     if opts.layers == "SOURCE":
@@ -662,6 +809,8 @@ def _layer_keys(data, opts: SvgOptions, n: int) -> np.ndarray:
         return names[idx]
     if opts.layers == "OBJECT":
         return np.full(n, data["object"], dtype=object)
+    if opts.layers == "DEPTH":
+        return data["depth_names"]
     return np.full(n, "lines", dtype=object)
 
 
@@ -676,14 +825,33 @@ def visible_polylines(collected: list, project, depth, opts: SvgOptions,
     groups = defaultdict(list)
     counts = defaultdict(int)
     n_edges = 0
-    for data in collected:
+
+    # 可視判定は先に全部やる。深度帯を「見えている辺」だけで決めたいので
+    spans = [visible_spans(d, project, depth, opts, mode) for d in collected]
+
+    if opts.layers == "DEPTH":
+        # 帯の境目は全オブジェクトまとめて決める。オブジェクトごとだと
+        # 同じ距離の線が別の帯に入ってしまう。
+        # 隠れた辺まで含めると範囲が奥へ伸びて、見えている線が手前の帯に
+        # 固まってしまう(実測: 3帯にしたのに2帯しか出なかった)
+        bands = max(2, min(int(opts.depth_bands), 5))
+        per_obj = [edge_depths(d, project) for d in collected]
+        vis = [dep[full] for dep, (full, _) in zip(per_obj, spans)
+               if len(dep)]
+        vis = [x for x in vis if len(x)]
+        alld = np.concatenate(vis) if vis else np.zeros(1)
+        lo, hi = np.percentile(alld, 2.0), np.percentile(alld, 98.0)
+        for data, dep in zip(collected, per_obj):
+            data["depth_names"] = depth_band_names(dep, lo, hi, bands)
+
+    for idx, data in enumerate(collected):
         for k, v in data["counts"].items():
             counts[k] += v
         edges = data["edges"]
         n_edges += len(edges)
         verts = data["verts"]
 
-        full, pieces = visible_spans(data, project, depth, opts, mode)
+        full, pieces = spans[idx]
         keys = _layer_keys(data, opts, len(edges))
         if opts.layers == "SOURCE" and opts.outline_layer:
             # 外周は出どころではなく見え方で決まるので、ここで上書きする
@@ -889,10 +1057,28 @@ def page_mm(page: str, width: int, height: int) -> tuple:
 
 
 def _layer_order(names) -> list:
-    """レイヤーの並びを決める。出どころ別なら優先順、それ以外は名前順。"""
-    known = [n for n in LAYER_PRIORITY if n in names]
-    rest = sorted(n for n in names if n not in LAYER_PRIORITY)
+    """レイヤーの並びを決める。知っている名前は決め打ち、残りは名前順。"""
+    known = [n for n in _LAYER_ORDER_HINT if n in names]
+    rest = sorted(n for n in names if n not in _LAYER_ORDER_HINT)
     return known + rest
+
+
+def layer_pen(name: str, opts: SvgOptions) -> float:
+    """そのレイヤーの線幅(mm)。
+
+    深度帯は奥ほど細くする。プロッタでは線幅＝ペンなので実際には層ごとに
+    ペンを割り当てることになるが、SVG のまま見たときにも遠近が出るように
+    stroke-width も変えておく。
+    """
+    if not name.startswith("depth"):
+        return opts.pen
+    try:
+        idx = int(name[5:]) - 1
+    except ValueError:
+        return opts.pen
+    bands = max(2, min(int(opts.depth_bands), 5))
+    t = idx / max(bands - 1, 1)
+    return opts.pen * (1.0 - t * (1.0 - opts.depth_weight))
 
 
 def _page_transform(groups, page_w: float, page_h: float,
@@ -1006,7 +1192,7 @@ def build_svg(groups, width: int, height: int, opts: SvgOptions,
                      f' id="layer{i}"')
         body.append(
             f'<g{attrs} fill="none" stroke="#000000"'
-            f' stroke-width="{opts.pen}"\n'
+            f' stroke-width="{layer_pen(name, opts):.4g}"\n'
             '   stroke-linecap="round" stroke-linejoin="round">\n'
             + "\n".join(rows) + "\n</g>")
 
@@ -1046,7 +1232,8 @@ def export_svg(context, filepath: str, opts: SvgOptions,
     height = max(16, int(round(width * scene.render.resolution_y
                                / max(1, scene.render.resolution_x))))
 
-    depth = render_depth_pass(scene, cam, width, height)
+    depth, shade = render_passes(scene, cam, width, height,
+                                shade=opts.hatch)
 
     depsgraph = context.evaluated_depsgraph_get()
     project = Projection(cam, depsgraph, width, height)
@@ -1064,7 +1251,17 @@ def export_svg(context, filepath: str, opts: SvgOptions,
     groups, stats = visible_polylines(collected, project, depth, opts, mode)
 
     page_w, page_h = page_mm(opts.page, width, height)
+    # 変換は線だけから決める。ハッチは絵の内側にしか出ないので、後から
+    # 足しても紙に収まる範囲は変わらない
     transform = _page_transform(groups, page_w, page_h, width, height, opts)
+
+    if opts.hatch:
+        # 間隔は紙の上の mm で指定してもらう。ピクセルに直すのに変換が要る
+        # ので、線の変換が決まってから作る
+        hatch = hatch_lines(shade, depth, transform[0], width, height, opts)
+        if hatch:
+            groups["hatch"] = hatch
+        stats["hatch_lines"] = len(hatch)
 
     base = Path(filepath)
     written = []

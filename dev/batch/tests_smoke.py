@@ -2335,6 +2335,125 @@ def t61():
                     f"(添字で繋いで別ソケットへ行った可能性)")
 
 
+def _lit_scene():
+    """陰影の出るシーン。fp_batch の白マテリアルはエミッションなので
+    拡散直接光が 0 になり、ハッチが一本も出ない。ここだけ拡散にする。"""
+    bpy.ops.wm.read_homefile(use_empty=True)
+    bpy.ops.mesh.primitive_monkey_add(size=2.0)
+    scene = bpy.context.scene
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+
+    mat = bpy.data.materials.new("fpm_test_diffuse")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    bsdf = nt.nodes.new("ShaderNodeBsdfDiffuse")
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    nt.links.new(bsdf.outputs[0], out.inputs["Surface"])
+    objs = [o for o in scene.objects if o.type == "MESH"]
+    for o in objs:
+        o.data.materials.clear()
+        o.data.materials.append(mat)
+
+    fp_batch.select_meshes()
+    bpy.ops.fpm.auto_vertex_color()
+    fp_batch.setup_camera_and_light()
+    scene.render.resolution_x = 400
+    scene.render.resolution_y = 300
+    return objs
+
+
+@test("SVG: the depth pass marks background as infinite, not clip_end")
+def t62():
+    """EEVEE は背景に clip_end(既定 1000)を書く。1e9 と比べていたので
+    背景判定が一度も成立しておらず、ハッチが紙全面に出た。正規化を固定する。"""
+    import numpy as np
+    from freepencil2 import svg_export
+
+    _lit_scene()
+    scene = bpy.context.scene
+    depth, _ = svg_export.render_passes(scene, scene.camera, 200, 150)
+    bg = depth >= svg_export.BACKGROUND_Z
+    assert bg.any(), "背景が背景として拾えていない(clip_end のまま?)"
+    assert (~bg).any(), "全部背景になっている"
+    assert np.isfinite(depth[~bg]).all(), "手前側に無限が混ざっている"
+
+
+@test("SVG: hatching is off by default and stays inside the drawing")
+def t63():
+    import re
+    import shutil
+    import tempfile
+    import numpy as np
+    from freepencil2 import svg_export
+
+    assert svg_export.SvgOptions().hatch is False, "ハッチは既定で切る"
+
+    _lit_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fpm_svg_"))
+    try:
+        st = svg_export.export_svg(
+            bpy.context, str(tmp / "h.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="SOURCE",
+                                  hatch=True, hatch_spacing=2.0))
+        assert st["layers"].get("hatch", 0) > 0, "ハッチが1本も出ていない"
+
+        text = (tmp / "h.svg").read_text(encoding="utf-8")
+        groups = dict(re.findall(
+            r'<g[^>]*inkscape:label="([^"]+)"[^>]*>(.*?)</g>', text, re.S))
+
+        def bbox(chunk):
+            pts = np.array([[float(v) for v in q.split(",")]
+                            for m in re.finditer(r'points="([^"]+)"', chunk)
+                            for q in m.group(1).split()])
+            return pts.min(0), pts.max(0)
+
+        h_lo, h_hi = bbox(groups["hatch"])
+        l_lo, l_hi = bbox("".join(v for k, v in groups.items()
+                                  if k != "hatch"))
+        # 背景まで塗っていたときは紙いっぱいに広がっていた。線の範囲に
+        # 収まっていることで、絵の中だけに乗っていると言える
+        assert (h_lo >= l_lo - 1.0).all() and (h_hi <= l_hi + 1.0).all(), (
+            f"ハッチが線の外に出ている: {h_lo}-{h_hi} vs {l_lo}-{l_hi}")
+
+        off = svg_export.export_svg(
+            bpy.context, str(tmp / "n.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="SOURCE",
+                                  hatch=False))
+        assert "hatch" not in off["layers"], "ハッチを切ったのに層が出た"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: depth bands split the visible range and thin with distance")
+def t64():
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fpm_svg_"))
+    try:
+        opts = svg_export.SvgOptions(depth_res=400, layers="DEPTH",
+                                     depth_bands=3)
+        st = svg_export.export_svg(bpy.context, str(tmp / "d.svg"), opts)
+        got = sorted(st["layers"])
+        assert got == ["depth1", "depth2", "depth3"], (
+            f"帯が揃っていない: {got}(見えている辺だけで範囲を決める)")
+        for name in got:
+            assert st["layers"][name] > 0, f"{name} が空"
+
+        # 奥ほど細くする。プロッタでは層ごとにペンを割り当てる想定だが、
+        # SVG のまま見ても遠近が出るように stroke-width も変える
+        widths = [svg_export.layer_pen(n, opts) for n in got]
+        assert widths[0] > widths[-1], f"奥が細くなっていない: {widths}"
+        assert abs(widths[-1] - opts.pen * opts.depth_weight) < 1e-9
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     print("[tests] FreePencil smoke tests")
     fp_batch.install_addon()
