@@ -1,6 +1,11 @@
-# FreePencil2
+# FreePencil2 - SVG Mod
 
 [日本語](README.md) | **English**
+
+> **An unofficial fork of [FreePencil2](https://github.com/megamarsun/FreePencil2) by Masamune Sakaki.**
+> It adds SVG export for pen plotters as the primary feature, and registers
+> as a separate extension, so it can be installed and enabled alongside the
+> original.
 
 A Blender add-on that automatically generates line art from 3D models. Lines
 come out as **vectors (SVG)** or as raster (a rendered image via the compositor).
@@ -195,7 +200,7 @@ Blender 4.5, from pressing STEP0 until completion (each measured twice).
 ## Supported versions
 
 The same package can be installed on all of the following, and the regression
-tests are run on every version (60 of them now, 21 covering the SVG export).
+tests are run on every version (61 of them now, 21 covering the SVG export).
 The SVG export is confirmed to produce identical results on 4.5.6 and 5.2.1 -
 edges, path count and drawn length all match on a 1M-face model.
 
@@ -227,29 +232,23 @@ blender --command extension build --source-dir . --output-dir dist
 Install the generated `dist/freepencil2_svg_mod-*.zip` via
 **Edit → Preferences → Add-ons → ▼ → Install from Disk**.
 
-## About this repository and note
+## About the original and this fork
 
-**This is a development repository.** The progress of development is published
-as-is; use it at your own risk. No user manual and no support are included.
+This repository is an unofficial fork of [megamarsun/FreePencil2](https://github.com/megamarsun/FreePencil2).
+The color-separation method itself and the STEP0-STEP5 raster pipeline are
+the original author's work; what this fork adds is the SVG export.
 
-| | GitHub (here) | note |
-|---|---|---|
-| Source code | **Yes** (all versions via tags) | Yes (the zip contains .py files) |
-| Ready-to-use zip | **Not provided** (build it yourself) | **Included** |
-| Zips of past versions | **Not provided** | **Yes** |
-| Japanese manual | No | **Yes** |
-| Support | No | **For purchasers of the first article** |
-| Update notifications | No | **Yes** |
+**The articles, manual and paid support on the original author's note do
+not cover this fork.** Please direct questions and purchases about the
+original to the original channels, and bugs or requests for this fork to
+this repository's issues.
 
-For the source of a past version, get it from the git tag and build it yourself.
-**Prebuilt past versions are not hosted on GitHub.** Old packages left lying around
-make it hard to isolate the cause of problems; if you need a past version, that is
-handled through the paid support on note.
+- Original: https://github.com/megamarsun/FreePencil2
+- The original author's note (articles, manual, support): https://note.com/megamarsun/n/nddacd81c6eae
 
-The follow-up articles also cover how to make line art and various techniques.
-Buying them supports development.
-
-→ note: https://note.com/megamarsun/n/nddacd81c6eae
+**This is a development repository.** No ready-to-use zip is hosted here;
+build it yourself with the steps under "Building and installing" above.
+Source for past versions is available from the git tags.
 
 The change history is in [CHANGELOG.md](CHANGELOG.md).
 
@@ -264,6 +263,10 @@ The change history is in [CHANGELOG.md](CHANGELOG.md).
 
 GPL-3.0-or-later
 
-## Author
+## Authors
 
-Masamune Sakaki — https://masamunesakaki.com/
+- Original: Masamune Sakaki — https://masamunesakaki.com/
+- SVG Mod: Henry Triplette — https://github.com/henrytriplette/FreePencil2-svg
+
+A modification, under the same licence, of the original released under
+GPL-3.0-or-later.

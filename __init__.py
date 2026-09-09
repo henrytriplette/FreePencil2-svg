@@ -1,7 +1,7 @@
 bl_info = {
     "name": "FreePencil2 - SVG Mod",
     "author": "Masamune Sakaki",
-    "version": (2, 8, 0),
+    "version": (2, 8, 1),
     # インストール可能な下限。blender_manifest.toml の blender_version_min と
     # 同じ値にすること(テスト t32 が一致を固定している)。
     # 4.2 は限定対応 = レンダリングは動くがライブプレビューは出ない。

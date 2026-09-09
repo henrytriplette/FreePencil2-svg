@@ -1,5 +1,18 @@
 # FreePencil2 - Changelog
 
+## [2.8.1] - 2026-09-09
+### Changed
+- **The README now reads as a fork, not as a copy of the original's.** It
+  had kept the upstream "GitHub vs note" section verbatim, which pointed
+  users at the original author's **paid support** for problems with this
+  fork, and at their note for past-version zips. That is misleading to
+  users and unfair to the original author.
+
+  Both READMEs now open by identifying this as an unofficial fork of
+  megamarsun/FreePencil2, state plainly that the original's articles,
+  manual and paid support do not cover this fork, and credit the original
+  author alongside the fork maintainer.
+
 ## [2.8.0] - 2026-09-09
 ### Added
 - **SVG export for pen plotters, as the add-on's primary output.** A new
