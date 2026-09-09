@@ -12,6 +12,8 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  # 手動実行。タグを打ち直さずに検査だけ回したいときに使う
+  workflow_dispatch:
 
 env:
   BLENDER_VERSION: "4.5.2"
