@@ -104,7 +104,7 @@ class SvgOptions:
         self.layers = layers
         self.outline_layer = outline_layer
         self.outline_gap = outline_gap
-        # bone だけ既定で切ってある。ラスタ経路の fp_ch_bone は 1.0 だが、
+        # bone だけ既定で切ってある。ラスタ経路の fpm_ch_bone は 1.0 だが、
         # ボーン境界はプロッタでは線が増えすぎるので出どころとしては任意
         self.sources = dict(mecha=True, material=True, bone=False,
                             open=True, silhouette=True)
@@ -128,29 +128,29 @@ class SvgOptions:
     def from_scene(cls, scene):
         g = getattr
         return cls(
-            page=g(scene, "fp_svg_page", "A4"),
-            margin=g(scene, "fp_svg_margin", 10.0),
-            pen=g(scene, "fp_svg_pen", 0.3),
-            merge_tolerance=g(scene, "fp_svg_merge_tolerance", 0.1),
-            simplify=g(scene, "fp_svg_simplify", 0.05),
-            samples=g(scene, "fp_svg_samples", 8),
-            bias=g(scene, "fp_svg_bias", 0.001),
-            neighbourhood=g(scene, "fp_svg_neighbourhood", 0),
-            depth_res=g(scene, "fp_svg_depth_res", 1600),
-            sort=g(scene, "fp_svg_sort", True),
-            keep_hidden=g(scene, "fp_svg_keep_hidden", False),
-            seed=g(scene, "fp_color_seed", 42),
-            sources={s: bool(g(scene, f"fp_svg_src_{s}", s != "bone"))
+            page=g(scene, "fpm_svg_page", "A4"),
+            margin=g(scene, "fpm_svg_margin", 10.0),
+            pen=g(scene, "fpm_svg_pen", 0.3),
+            merge_tolerance=g(scene, "fpm_svg_merge_tolerance", 0.1),
+            simplify=g(scene, "fpm_svg_simplify", 0.05),
+            samples=g(scene, "fpm_svg_samples", 8),
+            bias=g(scene, "fpm_svg_bias", 0.001),
+            neighbourhood=g(scene, "fpm_svg_neighbourhood", 0),
+            depth_res=g(scene, "fpm_svg_depth_res", 1600),
+            sort=g(scene, "fpm_svg_sort", True),
+            keep_hidden=g(scene, "fpm_svg_keep_hidden", False),
+            seed=g(scene, "fpm_color_seed", 42),
+            sources={s: bool(g(scene, f"fpm_svg_src_{s}", s != "bone"))
                      for s in LINE_SOURCES},
-            respect_paint=g(scene, "fp_svg_respect_paint", True),
-            layers=g(scene, "fp_svg_layers", "NONE"),
-            outline_layer=g(scene, "fp_svg_outline_layer", True),
-            outline_gap=g(scene, "fp_svg_outline_gap", 0.02),
-            fit=g(scene, "fp_svg_fit", "DRAWING"),
-            plot_speed=g(scene, "fp_svg_plot_speed", 80.0),
-            travel_speed=g(scene, "fp_svg_travel_speed", 200.0),
-            pen_lift=g(scene, "fp_svg_pen_lift", 0.12),
-            split_files=g(scene, "fp_svg_split_files", False),
+            respect_paint=g(scene, "fpm_svg_respect_paint", True),
+            layers=g(scene, "fpm_svg_layers", "NONE"),
+            outline_layer=g(scene, "fpm_svg_outline_layer", True),
+            outline_gap=g(scene, "fpm_svg_outline_gap", 0.02),
+            fit=g(scene, "fpm_svg_fit", "DRAWING"),
+            plot_speed=g(scene, "fpm_svg_plot_speed", 80.0),
+            travel_speed=g(scene, "fpm_svg_travel_speed", 200.0),
+            pen_lift=g(scene, "fpm_svg_pen_lift", 0.12),
+            split_files=g(scene, "fpm_svg_split_files", False),
         )
 
 
@@ -1102,7 +1102,7 @@ def export_svg(context, filepath: str, opts: SvgOptions,
 class FP_OT_EXPORT_SVG(bpy.types.Operator):
     """Export the color-separation boundaries as a plotter-ready SVG."""
 
-    bl_idname = "freepencil.export_svg"
+    bl_idname = "fpm.export_svg"
     bl_label = "Export SVG"
     bl_description = ("Write the line art as vector paths for a pen plotter "
                       "(mm, no fill, constant stroke width)")
@@ -1152,7 +1152,7 @@ class FP_OT_EXPORT_SVG(bpy.types.Operator):
             f"|draw {stats['draw_mm']:.0f} mm, "
             f"travel {stats['pen_up_mm']:.0f} mm"
             f"|approx {mins:.1f} min at {opts.plot_speed:.0f} mm/s")
-        context.scene.fp_svg_last_result = summary
+        context.scene.fpm_svg_last_result = summary
 
         msg = summary.replace("|", "; ") + f" -> {path.name}"
         logger.info(msg)
@@ -1277,7 +1277,7 @@ def preview_info() -> str:
 class FP_OT_SVG_PREVIEW(bpy.types.Operator):
     """Compute the vector lines and show them in the viewport."""
 
-    bl_idname = "freepencil.svg_preview"
+    bl_idname = "fpm.svg_preview"
     bl_label = "Refresh preview"
     bl_description = ("Work out the lines that would be exported and draw "
                       "them in the 3D view. Look through the camera: hidden "
@@ -1295,7 +1295,7 @@ class FP_OT_SVG_PREVIEW(bpy.types.Operator):
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
         enable_preview()
-        context.scene.fp_svg_preview = True
+        context.scene.fpm_svg_preview = True
         self.report({'INFO'}, f"Preview: {info}")
         return {'FINISHED'}
 
@@ -1303,14 +1303,14 @@ class FP_OT_SVG_PREVIEW(bpy.types.Operator):
 class FP_OT_SVG_PREVIEW_CLEAR(bpy.types.Operator):
     """Stop drawing the preview."""
 
-    bl_idname = "freepencil.svg_preview_clear"
+    bl_idname = "fpm.svg_preview_clear"
     bl_label = "Clear preview"
     bl_description = "Remove the preview lines from the 3D view"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
         disable_preview()
-        context.scene.fp_svg_preview = False
+        context.scene.fpm_svg_preview = False
         for area in context.screen.areas:
             if area.type == 'VIEW_3D':
                 area.tag_redraw()
@@ -1323,23 +1323,23 @@ class FP_OT_SVG_PREVIEW_CLEAR(bpy.types.Operator):
 SVG_PRESETS = {
     "FINE": {
         "label": "Fine pen",
-        "values": {"fp_svg_pen": 0.3, "fp_svg_merge_tolerance": 0.1,
-                   "fp_svg_simplify": 0.05, "fp_svg_layers": "NONE",
-                   "fp_svg_depth_res": 1600, "fp_svg_samples": 8},
+        "values": {"fpm_svg_pen": 0.3, "fpm_svg_merge_tolerance": 0.1,
+                   "fpm_svg_simplify": 0.05, "fpm_svg_layers": "NONE",
+                   "fpm_svg_depth_res": 1600, "fpm_svg_samples": 8},
     },
     "BOLD_OUTLINE": {
         "label": "Bold outline, 2 pens",
-        "values": {"fp_svg_pen": 0.5, "fp_svg_merge_tolerance": 0.2,
-                   "fp_svg_simplify": 0.08, "fp_svg_layers": "SOURCE",
-                   "fp_svg_outline_layer": True, "fp_svg_outline_gap": 0.10,
-                   "fp_svg_split_files": True, "fp_svg_depth_res": 1600},
+        "values": {"fpm_svg_pen": 0.5, "fpm_svg_merge_tolerance": 0.2,
+                   "fpm_svg_simplify": 0.08, "fpm_svg_layers": "SOURCE",
+                   "fpm_svg_outline_layer": True, "fpm_svg_outline_gap": 0.10,
+                   "fpm_svg_split_files": True, "fpm_svg_depth_res": 1600},
     },
     "DRAFT": {
         "label": "Quick draft",
-        "values": {"fp_svg_pen": 0.5, "fp_svg_merge_tolerance": 0.3,
-                   "fp_svg_simplify": 0.25, "fp_svg_layers": "NONE",
-                   "fp_svg_depth_res": 800, "fp_svg_samples": 4,
-                   "fp_svg_src_open": False},
+        "values": {"fpm_svg_pen": 0.5, "fpm_svg_merge_tolerance": 0.3,
+                   "fpm_svg_simplify": 0.25, "fpm_svg_layers": "NONE",
+                   "fpm_svg_depth_res": 800, "fpm_svg_samples": 4,
+                   "fpm_svg_src_open": False},
     },
 }
 
@@ -1347,7 +1347,7 @@ SVG_PRESETS = {
 class FP_OT_SVG_PRESET(bpy.types.Operator):
     """Apply a set of SVG export settings."""
 
-    bl_idname = "freepencil.svg_preset"
+    bl_idname = "fpm.svg_preset"
     bl_label = "Preset"
     bl_description = "Apply a ready-made combination of export settings"
     bl_options = {'REGISTER', 'UNDO'}
@@ -1372,7 +1372,7 @@ class FP_OT_SVG_PRESET(bpy.types.Operator):
 class FP_OT_EXPORT_SVG_CAMERAS(bpy.types.Operator):
     """Export an SVG for every camera ticked in STEP5."""
 
-    bl_idname = "freepencil.export_svg_cameras"
+    bl_idname = "fpm.export_svg_cameras"
     bl_label = "Export checked cameras"
     bl_description = ("Write one SVG per checked camera into "
                       "//svg_exports/. Uses the same camera ticks as STEP5")
@@ -1393,7 +1393,7 @@ class FP_OT_EXPORT_SVG_CAMERAS(bpy.types.Operator):
 
         cameras = sorted(
             (o for o in scene.objects
-             if o.type == "CAMERA" and getattr(o, "fp_cam_render", True)),
+             if o.type == "CAMERA" and getattr(o, "fpm_cam_render", True)),
             key=lambda o: o.name.lower())
         if not cameras:
             self.report({'ERROR'}, "No cameras checked")

@@ -671,26 +671,26 @@ def run_pipeline(args: argparse.Namespace, preset: dict, out_dir: Path,
             apply_white_material(objs)
 
         # preset -> scene props
-        scene.fp_use_random_seed = False
-        scene.fp_color_seed = args.seed
-        scene.fp_sharp_auto = preset.get("sharp_auto", False)
-        scene.fp_sharp_edges = preset["sharp_edges"]
-        scene.fp_color_noise_scale = preset["color_noise_scale"]
-        scene.fp_min_neighbor_color_distance = preset["min_neighbor_color_distance"]
-        scene.fp_max_color_retries = preset["max_color_retries"]
-        scene.fp_sharp_clear = preset.get("sharp_clear", False)
-        scene.fp_min_island_area_pct = preset.get("min_island_area_pct", 0.02)
+        scene.fpm_use_random_seed = False
+        scene.fpm_color_seed = args.seed
+        scene.fpm_sharp_auto = preset.get("sharp_auto", False)
+        scene.fpm_sharp_edges = preset["sharp_edges"]
+        scene.fpm_color_noise_scale = preset["color_noise_scale"]
+        scene.fpm_min_neighbor_color_distance = preset["min_neighbor_color_distance"]
+        scene.fpm_max_color_retries = preset["max_color_retries"]
+        scene.fpm_sharp_clear = preset.get("sharp_clear", False)
+        scene.fpm_min_island_area_pct = preset.get("min_island_area_pct", 0.02)
         # リグ付きアセットはボーン境界が線の主役なので bone AOV を自動有効化
         # (プリセットで明示指定があればそちらが勝つ)
-        scene.fp_bone_color = preset.get("bone_color", has_armature)
-        scene.fp_bone_grouping_mode = preset.get("bone_grouping", "basename")
-        scene.fp_bone_hard_names = preset.get("bone_hard_names", "")
-        scene.fp_part_tint = preset.get("part_tint", True)
-        scene.fp_seam_boundaries = preset.get("seam_boundaries", False)
-        scene.fp_line_sensitivity = preset.get("line_sensitivity", 1.0)
-        scene.fp_include_antialiasing = preset.get("antialiasing", True)
-        scene.fp_node_type = "pro"
-        scene.fp_enable_compositor_view = False
+        scene.fpm_bone_color = preset.get("bone_color", has_armature)
+        scene.fpm_bone_grouping_mode = preset.get("bone_grouping", "basename")
+        scene.fpm_bone_hard_names = preset.get("bone_hard_names", "")
+        scene.fpm_part_tint = preset.get("part_tint", True)
+        scene.fpm_seam_boundaries = preset.get("seam_boundaries", False)
+        scene.fpm_line_sensitivity = preset.get("line_sensitivity", 1.0)
+        scene.fpm_include_antialiasing = preset.get("antialiasing", True)
+        scene.fpm_node_type = "pro"
+        scene.fpm_enable_compositor_view = False
         for key, value in (overrides or {}).items():
             if key.startswith("fp_"):
                 setattr(scene, key, value)
@@ -699,18 +699,18 @@ def run_pipeline(args: argparse.Namespace, preset: dict, out_dir: Path,
 
         # STEP1: auto vertex color (may split objects into islands)
         t1 = time.time()
-        result = bpy.ops.freepencil.auto_vertex_color()
+        result = bpy.ops.fpm.auto_vertex_color()
         record["step1_result"] = list(result)
         record["step1_seconds"] = round(time.time() - t1, 2)
         objs = select_meshes()  # re-collect + re-select after split
 
         # STEP2: AOV setup via the real operator
-        bpy.ops.freepencil4.link_button()
+        bpy.ops.fpm4.link_button()
         if "mecha_color" not in [a.name for a in bpy.context.view_layer.aovs]:
             raise RuntimeError("STEP2 failed: mecha_color AOV missing")
 
         # STEP3: PRO compositor node via the real operator
-        bpy.ops.freepencil2.link_button()
+        bpy.ops.fpm2.link_button()
         _tree = comp_tree(scene)
         if _tree is None or not any(
             n.label == NODE_GROUP_PRO for n in _tree.nodes
@@ -768,21 +768,21 @@ def _band_distance(v: float) -> float:
 def choose_adaptive_overrides(ink_sil: float) -> list[dict]:
     """1回目の線密度から適応リトライの候補列を決める(不要なら空)。
 
-    注意: fp_sharp_auto が ON のままだと角度上書きが無効化されるため、
+    注意: fpm_sharp_auto が ON のままだと角度上書きが無効化されるため、
     リトライでは必ず auto を切って明示角度で振る。
     「線が少ない」は段階制: 20°で拾えないモデル(強ベベルの家具など、
     二面角が全て20°未満)は 8° まで下げて拾う(kallax で実証)。
     """
     if ink_sil < 0.016:
         return [
-            {"fp_sharp_auto": False, "fp_sharp_edges": 20.0,
+            {"fpm_sharp_auto": False, "fpm_sharp_edges": 20.0,
              "tag": "_adj1", "reason": "too few lines (20deg)"},
-            {"fp_sharp_auto": False, "fp_sharp_edges": 8.0,
+            {"fpm_sharp_auto": False, "fpm_sharp_edges": 8.0,
              "tag": "_adj2", "reason": "too few lines (8deg)"},
         ]
     if ink_sil > 0.45:
-        return [{"fp_sharp_auto": False, "fp_sharp_edges": 85.0,
-                 "fp_min_island_area_pct": 0.2,
+        return [{"fpm_sharp_auto": False, "fpm_sharp_edges": 85.0,
+                 "fpm_min_island_area_pct": 0.2,
                  "tag": "_adj1", "reason": "ink saturated"}]
     return []
 

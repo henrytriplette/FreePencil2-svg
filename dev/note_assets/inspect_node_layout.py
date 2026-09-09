@@ -31,8 +31,8 @@ fp_batch.install_addon()
 # 立方体1つで STEP0 まで通し、生成されたツリーを見る
 bpy.ops.mesh.primitive_cube_add()
 bpy.context.active_object.select_set(True)
-bpy.context.scene.fp_node_type = "pro"
-bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+bpy.context.scene.fpm_node_type = "pro"
+bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
 
 def rect(node):

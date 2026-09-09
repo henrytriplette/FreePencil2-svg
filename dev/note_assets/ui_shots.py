@@ -66,9 +66,9 @@ def shoot(area, name: str) -> None:
 # 既に描画済みのパネルには効かない (Blender が idname ごとに状態を持つ)。
 # そこで別 idname のサブクラスを登録し直す。未描画の idname は bl_options の
 # 既定値で描かれるので、狙った開閉状態になる。
-PANEL_ORDER = ["FREEPENCIL_PT_STEP0", "FREEPENCIL_PT_STEP1",
-               "FREEPENCIL_PT_STEP2", "FREEPENCIL_PT_STEP3",
-               "FREEPENCIL_PT_STEP4", "FREEPENCIL_PT_CAMERAS"]
+PANEL_ORDER = ["FPM_PT_STEP0", "FPM_PT_STEP1",
+               "FPM_PT_STEP2", "FPM_PT_STEP3",
+               "FPM_PT_STEP4", "FPM_PT_CAMERAS"]
 _current: dict[str, type] = {}
 _variant = {"n": 0}
 _big_outliner: dict = {}
@@ -116,7 +116,7 @@ def select_fp_tab():
 
 
 def prep_step3():
-    panels_variant({"FREEPENCIL_PT_STEP3"})
+    panels_variant({"FPM_PT_STEP3"})
     return find_area("VIEW_3D")
 
 
@@ -136,7 +136,7 @@ def prep_outliner():
         o.select_set(True)
     if meshes:
         bpy.context.view_layer.objects.active = meshes[0]
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
     log(f"node groups: {[g.name for g in bpy.data.node_groups]}")
     area = find_area("PREFERENCES")
     area.ui_type = "OUTLINER"

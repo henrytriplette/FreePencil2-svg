@@ -53,7 +53,7 @@ def hash_mesh(me) -> dict:
 
 
 def paint_selected() -> None:
-    bpy.ops.freepencil.auto_vertex_color("EXEC_DEFAULT")
+    bpy.ops.fpm.auto_vertex_color("EXEC_DEFAULT")
 
 
 def run_one(name: str, blend: Path) -> dict:
@@ -66,10 +66,10 @@ def run_one(name: str, blend: Path) -> dict:
         return {}
     fp_batch.normalize(meshes + others, meshes)
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 42
-    scene.fp_enable_compositor_view = False
-    scene.fp_auto_detect_aov = False
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 42
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_auto_detect_aov = False
 
     meshes = [o for o in scene.objects if o.type == "MESH"]
     if not meshes:
@@ -89,10 +89,10 @@ if BLEND:
     # 単一 .blend の中の、面数上位のメッシュだけを対象にする
     bpy.ops.wm.open_mainfile(filepath=str(Path(BLEND).resolve()))
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 42
-    scene.fp_enable_compositor_view = False
-    scene.fp_auto_detect_aov = False
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 42
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_auto_detect_aov = False
     rep = {}
     for o in scene.objects:
         if o.type != "MESH":

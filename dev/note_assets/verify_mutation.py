@@ -93,7 +93,7 @@ else:
     label = Path(BLEND).name
 
 before = snapshot()
-bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 after = snapshot()
 
 diff = {}

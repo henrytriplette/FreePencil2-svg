@@ -360,7 +360,7 @@ def create_node_tree_freepencil_v1_1_0_pro():
     ramp.elements[0].color = (1.000000, 1.000000, 1.000000, 1.000000)
     
     # 初期値調整(2026-07-16): mecha線しきい値 0.2→0.14(スイープで実測した
-    # 感度0.5〜0.7の改善方向を既定に反映。fp_line_sensitivity でさらに調整可)
+    # 感度0.5〜0.7の改善方向を既定に反映。fpm_line_sensitivity でさらに調整可)
     ramp.elements[1].position = 0.1400000000
     ramp.elements[1].color = (0.000000, 0.000000, 0.000000, 1.000000)
     # ColorRamp設定

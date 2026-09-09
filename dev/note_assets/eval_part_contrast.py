@@ -44,7 +44,7 @@ if SCHEME == "old":
 objs, _others = render_samples.stage_model(Path(BLEND))
 fp_batch.apply_white_material(objs)
 fp_batch.select_meshes()
-bpy.ops.freepencil.auto_vertex_color()
+bpy.ops.fpm.auto_vertex_color()
 
 # 塗り終わった頂点カラーから、オブジェクトごとに使われている輝度を集める
 per_obj: dict[str, list[float]] = {}

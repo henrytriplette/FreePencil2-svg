@@ -62,7 +62,7 @@ try:
             info = ast.literal_eval(node.value)
             rec["file_version"] = list(info["version"])
             break
-    rec["panel"] = bpy.types.FREEPENCIL_PT_LINE.bl_label
+    rec["panel"] = bpy.types.FPM_PT_LINE.bl_label
     rec["path"] = mod.__file__
     bpy.ops.wm.save_userpref()
     rec["ok"] = True
@@ -83,7 +83,7 @@ try:
         rec["error"] = "アドオンが有効になっていない"
     else:
         rec["version"] = list(mod.ADDON_VERSION)
-        rec["panel"] = bpy.types.FREEPENCIL_PT_LINE.bl_label
+        rec["panel"] = bpy.types.FPM_PT_LINE.bl_label
         rec["path"] = mod.__file__
         rec["ok"] = True
 except Exception:

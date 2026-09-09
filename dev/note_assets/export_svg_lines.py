@@ -189,12 +189,12 @@ def main() -> None:
     rec["faces_total"] = int(sum(len(o.data.polygons) for o in objs))
 
     fp_batch.apply_white_material(objs)
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = args.seed
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = args.seed
 
     fp_batch.select_meshes()
     t1 = time.time()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     rec["step1_seconds"] = round(time.time() - t1, 2)
 
     fp_batch.setup_camera_and_light()

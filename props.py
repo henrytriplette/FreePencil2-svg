@@ -25,7 +25,7 @@ def _update_line_tuning(self, context):
         if ng.name.startswith(fp_core.NODE_GROUP_PREFIX):
             fp_core.apply_line_tuning(
                 ng,
-                getattr(scene, "fp_line_sensitivity", 1.0),
+                getattr(scene, "fpm_line_sensitivity", 1.0),
                 fp_core.channel_strengths_from_scene(scene))
 
 
@@ -41,13 +41,13 @@ def _update_far_relief(self, context):
 def _update_svg_preview(self, context):
     """プレビューの ON/OFF。切ったら描画ハンドラも外す。"""
     from . import svg_export
-    if self.fp_svg_preview:
+    if self.fpm_svg_preview:
         if svg_export._preview_segments is None:
             try:
                 svg_export.refresh_preview(context)
             except RuntimeError as exc:
                 logger.info(f"SVG preview not ready: {exc}")
-                self["fp_svg_preview"] = False
+                self["fpm_svg_preview"] = False
                 return
         svg_export.enable_preview()
     else:
@@ -62,9 +62,9 @@ def _update_white_preview(self, context):
     from . import fp_core
     scene = context.scene
     n = fp_core.set_white_preview(
-        scene, scene.fp_white_preview,
-        keep_glass=getattr(scene, "fp_white_keep_glass", True))
-    logger.info(f"White preview {'ON' if scene.fp_white_preview else 'OFF'}: "
+        scene, scene.fpm_white_preview,
+        keep_glass=getattr(scene, "fpm_white_keep_glass", True))
+    logger.info(f"White preview {'ON' if scene.fpm_white_preview else 'OFF'}: "
                 f"{n} objects")
 
 
@@ -72,10 +72,10 @@ def _update_white_keep_glass(self, context):
     """プレビュー中にガラス維持を切り替えたら復元→再適用で反映する。"""
     from . import fp_core
     scene = context.scene
-    if scene.fp_white_preview:
+    if scene.fpm_white_preview:
         fp_core.set_white_preview(scene, False)
         fp_core.set_white_preview(scene, True,
-                                  keep_glass=scene.fp_white_keep_glass)
+                                  keep_glass=scene.fpm_white_keep_glass)
 
 
 def register_props():
@@ -96,17 +96,17 @@ def register_props():
     ]
 
     props_to_register = {
-        "fp_sharp_clear": BoolProperty(
+        "fpm_sharp_clear": BoolProperty(
             name="clear sharp",
             description="Erase outline's sharp edges",
             default=False
         ),
-        "fp_mat_count": BoolProperty(
+        "fpm_mat_count": BoolProperty(
             name="material ID",
             description="Add the material ID",
             default=False
         ),
-        "fp_sharp_auto": BoolProperty(
+        "fpm_sharp_auto": BoolProperty(
             name="Auto edge angle",
             description=(
                 "Choose the sharp-edge angle automatically from the mesh's "
@@ -116,14 +116,14 @@ def register_props():
             # 一括評価パイプラインはプリセットで明示的にONにする。
             default=False
         ),
-        "fp_sharp_edges": FloatProperty(
+        "fpm_sharp_edges": FloatProperty(
             name="Line sharp edges",
             description="Outline's angle threshold.",
             default=30.0,
             min=0.0,
             max=180.0
         ),
-        "fp_seam_boundaries": BoolProperty(
+        "fpm_seam_boundaries": BoolProperty(
             name="Seam/material boundaries",
             description=(
                 "Treat UV seams and material borders as island boundaries "
@@ -131,7 +131,7 @@ def register_props():
             ),
             default=False
         ),
-        "fp_min_island_area_pct": FloatProperty(
+        "fpm_min_island_area_pct": FloatProperty(
             name="Min island area %",
             description=(
                 "Merge islands smaller than this % of total mesh area "
@@ -144,25 +144,25 @@ def register_props():
             step=0.01,
             precision=3
         ),
-        "fp_color_type": EnumProperty(
+        "fpm_color_type": EnumProperty(
             name="Vertex color type",
             description="Select vertex color type.",
             items=color_type_items,
             default='mecha_color'
         ),
-        "fp_node_type": EnumProperty(
+        "fpm_node_type": EnumProperty(
             name="Select node type",
             description="Select Node Type",
             items=node_type_items,
             default='test'
         ),
         # Requires Blender 4.3+ for Real-Time Compositor preview
-        "fp_enable_compositor_view": BoolProperty(
+        "fpm_enable_compositor_view": BoolProperty(
             name="Enable Compositor Preview",
             description="Enable Compositor Preview",
             default=True
         ),
-        "fp_far_relief": FloatProperty(
+        "fpm_far_relief": FloatProperty(
             name="Far crush relief",
             description=(
                 "Thin out lines where they have merged into solid black "
@@ -172,7 +172,7 @@ def register_props():
             default=0.0, min=0.0, max=1.0, step=0.05, precision=2,
             update=_update_far_relief
         ),
-        "fp_far_relief_radius": FloatProperty(
+        "fpm_far_relief_radius": FloatProperty(
             name="Relief radius",
             description=(
                 "How far to look when measuring how crowded the lines are, "
@@ -181,7 +181,7 @@ def register_props():
             default=6.0, min=1.0, max=32.0, step=100, precision=0,
             update=_update_far_relief
         ),
-        "fp_far_relief_threshold": FloatProperty(
+        "fpm_far_relief_threshold": FloatProperty(
             name="Relief threshold",
             description=(
                 "How crowded an area must be before it is thinned. "
@@ -190,7 +190,7 @@ def register_props():
             default=0.35, min=0.05, max=0.95, step=0.05, precision=2,
             update=_update_far_relief
         ),
-        "fp_line_sensitivity": FloatProperty(
+        "fpm_line_sensitivity": FloatProperty(
             name="Line sensitivity",
             description=(
                 "Scale the line-detection thresholds inside the node group. "
@@ -214,7 +214,7 @@ def register_props():
             update=_update_line_tuning
         ),
         **{
-            f"fp_ch_{ch}": FloatProperty(
+            f"fpm_ch_{ch}": FloatProperty(
                 name=f"{label} strength",
                 description=(
                     f"Line strength of the {label} channel. "
@@ -237,39 +237,39 @@ def register_props():
         **{
             name: BoolProperty(name=label, description=desc, default=default)
             for name, label, desc, default in (
-                ("fp_auto_sharp", "Auto: edge angle",
+                ("fpm_auto_sharp", "Auto: edge angle",
                  "Full auto sets the sharp-edge angle automatically", True),
-                ("fp_auto_seam", "Auto: seam/material boundaries",
+                ("fpm_auto_seam", "Auto: seam/material boundaries",
                  "Full auto splits islands at UV seams and material borders", True),
-                ("fp_auto_merge", "Auto: merge small islands",
+                ("fpm_auto_merge", "Auto: merge small islands",
                  "Full auto merges tiny islands (0.02%)", True),
-                ("fp_auto_part_tint", "Auto: part tint",
+                ("fpm_auto_part_tint", "Auto: part tint",
                  "Full auto separates touching parts by brightness bands", True),
-                ("fp_auto_bone", "Auto: bone AOV by rig detection",
+                ("fpm_auto_bone", "Auto: bone AOV by rig detection",
                  "Full auto enables the bone AOV when an armature is found", True),
-                ("fp_auto_aa", "Auto: anti-aliasing",
+                ("fpm_auto_aa", "Auto: anti-aliasing",
                  "Full auto includes the anti-aliasing node", True),
-                ("fp_auto_hashed", "Auto: BLEND to HASHED",
+                ("fpm_auto_hashed", "Auto: BLEND to HASHED",
                  "Full auto converts BLEND materials (except real glass) to "
                  "HASHED so AOVs render", True),
-                ("fp_auto_supersample", "Auto: 2x supersampling",
+                ("fpm_auto_supersample", "Auto: 2x supersampling",
                  "Full auto enables 2x render + 50% output scaling. "
                  "Near-essential: FreePencil lines are too thick without it",
                  True),
-                ("fp_auto_detect_aov", "Auto: AOVs from scene",
+                ("fpm_auto_detect_aov", "Auto: AOVs from scene",
                  "Full auto owns the AOV setup: gen/mask/line follow whether "
                  "those vertex colors are painted, mat follows material ID. "
                  "STEP2 manual toggles are overridden while this is on", True),
-                ("fp_auto_file_output", "Auto: enable File Output",
+                ("fpm_auto_file_output", "Auto: enable File Output",
                  "Full auto also enables the STEP3 File Output node", False),
-                ("fp_auto_white_preview", "Auto: white material preview",
+                ("fpm_auto_white_preview", "Auto: white material preview",
                  "Full auto turns on the white material preview so the line "
                  "art is visible right after setup. Materials are untouched "
                  "(the compositor is switched); turn it off to see the "
                  "original materials", True),
             )
         },
-        "fp_supersample": BoolProperty(
+        "fpm_supersample": BoolProperty(
             name="2x supersampling (thin lines)",
             description=(
                 "Render at 200% resolution and scale the compositor output "
@@ -278,7 +278,7 @@ def register_props():
             ),
             default=False
         ),
-        "fp_white_preview": BoolProperty(
+        "fpm_white_preview": BoolProperty(
             name="White material preview",
             description=(
                 "Temporarily replace all materials with a flat white "
@@ -289,7 +289,7 @@ def register_props():
             default=False,
             update=_update_white_preview
         ),
-        "fp_white_keep_glass": BoolProperty(
+        "fpm_white_keep_glass": BoolProperty(
             name="Keep glass transparent",
             description=(
                 "While white preview is on, leave real glass materials "
@@ -299,7 +299,7 @@ def register_props():
             default=True,
             update=_update_white_keep_glass
         ),
-        "fp_file_output": BoolProperty(
+        "fpm_file_output": BoolProperty(
             name="File Output",
             description=(
                 "Add a File Output node to the generated compositor tree "
@@ -309,17 +309,17 @@ def register_props():
         ),
         # どのパスを書き出すかは個別に選ぶ。影は EEVEE だとノイズが多く
         # 使えないことが多いので既定 OFF、ディフューズ直接光を既定 ON。
-        "fp_fo_line": BoolProperty(
+        "fpm_fo_line": BoolProperty(
             name="Write line pass",
             description="Write the line art to line.png",
             default=True
         ),
-        "fp_fo_color": BoolProperty(
+        "fpm_fo_color": BoolProperty(
             name="Write color pass",
             description="Write the flat color output to color.png",
             default=True
         ),
-        "fp_fo_light": BoolProperty(
+        "fpm_fo_light": BoolProperty(
             name="Write light pass",
             description=(
                 "Write the diffuse direct light pass to light.png. "
@@ -327,7 +327,7 @@ def register_props():
             ),
             default=True
         ),
-        "fp_fo_shadow": BoolProperty(
+        "fpm_fo_shadow": BoolProperty(
             name="Write shadow pass",
             description=(
                 "Write the shadow pass to shadow.png. "
@@ -335,43 +335,43 @@ def register_props():
             ),
             default=False
         ),
-        "fp_file_output_path": bpy.props.StringProperty(
+        "fpm_file_output_path": bpy.props.StringProperty(
             name="File Output path",
             description="Base path for the File Output node",
             default="//render/",
             subtype='DIR_PATH'
         ),
-        "fp_include_antialiasing": BoolProperty(
+        "fpm_include_antialiasing": BoolProperty(
             name="Include Anti-Aliasing Node",
             description="Insert Anti-Aliasing node before Composite",
             default=False,
         ),
-        "fp_gen_color": BoolProperty(
+        "fpm_gen_color": BoolProperty(
             name="generator color",
             description="AOV Generator Color",
             default=False
         ),
-        "fp_mask_color": BoolProperty(
+        "fpm_mask_color": BoolProperty(
             name="mask color",
             description="AOV Mask Color(White erases lines)",
             default=False
         ),
-        "fp_line_color": BoolProperty(
+        "fpm_line_color": BoolProperty(
             name="line color",
             description="AOV Line Color",
             default=False
         ),
-        "fp_mat_color": BoolProperty(
+        "fpm_mat_color": BoolProperty(
             name="material color",
             description="AOV Material Boundary Color",
             default=False
         ),
-        "fp_bone_color": BoolProperty(
+        "fpm_bone_color": BoolProperty(
             name="bone color",
             description="AOV Bone Color",
             default=False
         ),
-        "fp_color_noise_scale": FloatProperty(
+        "fpm_color_noise_scale": FloatProperty(
             name="Color noise scale",
             description="Increasing the scale scatters island colors more randomly.",
             default=1.0,
@@ -381,7 +381,7 @@ def register_props():
             precision=2,
             subtype='FACTOR'
         ),
-        "fp_min_neighbor_color_distance": FloatProperty(
+        "fpm_min_neighbor_color_distance": FloatProperty(
             name="Min color distance",
             description="Minimum RGB distance between neighboring islands (0–1.732). Lower values allow similar colors.",
             default=0.5,
@@ -390,14 +390,14 @@ def register_props():
             step=0.01,
             precision=2
         ),
-        "fp_max_color_retries": IntProperty(
+        "fpm_max_color_retries": IntProperty(
             name="Max color retries",
             description="How many times to retry when a color already exists",
             default=30,
             min=1,
             max=200
         ),
-        "fp_use_random_seed": BoolProperty(
+        "fpm_use_random_seed": BoolProperty(
             name="Random seed each run",
             description=(
                 "Generate a new random seed every run. "
@@ -405,7 +405,7 @@ def register_props():
             ),
             default=True
         ),
-        "fp_color_seed": IntProperty(
+        "fpm_color_seed": IntProperty(
             name="Color seed",
             description=(
                 "Seed for island color generation. "
@@ -415,7 +415,7 @@ def register_props():
             min=0,
             max=2147483647
         ),
-        "fp_bone_grouping_mode": EnumProperty(
+        "fpm_bone_grouping_mode": EnumProperty(
             name=t("Bone color grouping"),
             description=t("How to group bone names when coloring bone_color"),
             items=[
@@ -425,7 +425,7 @@ def register_props():
             ],
             default='basename',
         ),
-        "fp_part_tint": BoolProperty(
+        "fpm_part_tint": BoolProperty(
             name="Part tint (mecha color)",
             description=(
                 "Give touching parts (objects) different brightness bands "
@@ -435,7 +435,7 @@ def register_props():
             ),
             default=True
         ),
-        "fp_bone_hard_names": bpy.props.StringProperty(
+        "fpm_bone_hard_names": bpy.props.StringProperty(
             name="Hard boundary bones",
             description=(
                 "Comma-separated bone names whose region boundary should be "
@@ -444,7 +444,7 @@ def register_props():
             ),
             default=""
         ),
-        "fp_half_color": FloatVectorProperty(
+        "fpm_half_color": FloatVectorProperty(
             name="Half mask color",
             description="Color used by Half Fill",
             subtype='COLOR',
@@ -457,7 +457,7 @@ def register_props():
         # --- SVG 書き出し(ペンプロッタ) --------------------------------
         # 既定値は実機モデル(104万面のCAD)で詰めたもの。詳しくは
         # svg_export.py と dev/note_assets/README.md を見ること。
-        "fp_svg_page": EnumProperty(
+        "fpm_svg_page": EnumProperty(
             name="Page",
             description="Paper size. Orientation follows the render aspect",
             items=[('A5', "A5", "148 x 210 mm"),
@@ -466,50 +466,50 @@ def register_props():
                    ('LETTER', "Letter", "215.9 x 279.4 mm")],
             default='A4'
         ),
-        "fp_svg_margin": FloatProperty(
+        "fpm_svg_margin": FloatProperty(
             name="Margin",
             description="Page margin in millimetres",
             default=10.0, min=0.0, max=100.0
         ),
-        "fp_svg_pen": FloatProperty(
+        "fpm_svg_pen": FloatProperty(
             name="Pen width",
             description="Stroke width in millimetres. Match your pen",
             default=0.3, min=0.01, max=5.0
         ),
-        "fp_svg_merge_tolerance": FloatProperty(
+        "fpm_svg_merge_tolerance": FloatProperty(
             name="Merge tolerance",
             description=("Join line ends closer than this (mm). Set it from "
                          "the pen width, not from how small the drawing is"),
             default=0.1, min=0.0, max=5.0
         ),
-        "fp_svg_simplify": FloatProperty(
+        "fpm_svg_simplify": FloatProperty(
             name="Simplify",
             description="Drop points that move the line less than this (mm)",
             default=0.05, min=0.0, max=5.0
         ),
-        "fp_svg_sort": BoolProperty(
+        "fpm_svg_sort": BoolProperty(
             name="Sort draw order",
             description="Reorder paths to shorten pen-up travel",
             default=True
         ),
-        "fp_svg_depth_res": IntProperty(
+        "fpm_svg_depth_res": IntProperty(
             name="Depth resolution",
             description=("Width of the depth pass used for hidden-line "
                          "removal. Line accuracy follows this"),
             default=1600, min=256, max=8192
         ),
-        "fp_svg_samples": IntProperty(
+        "fpm_svg_samples": IntProperty(
             name="Samples per edge",
             description="Visibility test points along each edge",
             default=8, min=1, max=64
         ),
-        "fp_svg_bias": FloatProperty(
+        "fpm_svg_bias": FloatProperty(
             name="Depth bias",
             description=("Relative tolerance when comparing depth. Lines sit "
                          "on the surface, so some bias is required"),
             default=0.001, min=0.0, max=0.1, precision=4
         ),
-        "fp_svg_neighbourhood": IntProperty(
+        "fpm_svg_neighbourhood": IntProperty(
             name="Depth neighbourhood",
             description=("Radius in pixels for the depth lookup. Above 0 the "
                          "maximum is taken, which lets the interior of "
@@ -517,42 +517,42 @@ def register_props():
             default=0, min=0, max=4
         ),
         # 線の出どころ。ラスタ経路の fp_ch_* に対応する。bone だけ既定で
-        # 切ってある(fp_ch_bone は 1.0 だが、ボーン境界はプロッタでは
+        # 切ってある(fpm_ch_bone は 1.0 だが、ボーン境界はプロッタでは
         # 線が増えすぎるので、要る人だけ入れる)
-        "fp_svg_src_mecha": BoolProperty(
+        "fpm_svg_src_mecha": BoolProperty(
             name="Color separation",
             description="Edges where the mecha_color differs",
             default=True
         ),
-        "fp_svg_src_material": BoolProperty(
+        "fpm_svg_src_material": BoolProperty(
             name="Material boundaries",
             description="Edges between different materials",
             default=True
         ),
-        "fp_svg_src_bone": BoolProperty(
+        "fpm_svg_src_bone": BoolProperty(
             name="Bone boundaries",
             description=("Edges where the bone_color differs. Off by "
                          "default: it adds a lot of lines for a plotter"),
             default=False
         ),
-        "fp_svg_src_open": BoolProperty(
+        "fpm_svg_src_open": BoolProperty(
             name="Open edges",
             description=("Edges without exactly two faces. Imported CAD "
                          "with unwelded shells produces many of these"),
             default=True
         ),
-        "fp_svg_src_silhouette": BoolProperty(
+        "fpm_svg_src_silhouette": BoolProperty(
             name="Silhouette",
             description="Edges where the surface turns away from the camera",
             default=True
         ),
-        "fp_svg_respect_paint": BoolProperty(
+        "fpm_svg_respect_paint": BoolProperty(
             name="Honour STEP4 paint",
             description=("Drop lines erased with mask_color or made "
                          "invisible with line_color"),
             default=True
         ),
-        "fp_svg_fit": EnumProperty(
+        "fpm_svg_fit": EnumProperty(
             name="Fit",
             description="How the drawing is placed on the page",
             items=[
@@ -565,14 +565,14 @@ def register_props():
             ],
             default='DRAWING'
         ),
-        "fp_svg_split_files": BoolProperty(
+        "fpm_svg_split_files": BoolProperty(
             name="One file per layer",
             description=("With layers on, write a separate SVG per layer so "
                          "each can go to a different pen. All files share "
                          "one page transform, so they line up"),
             default=False
         ),
-        "fp_svg_preview": BoolProperty(
+        "fpm_svg_preview": BoolProperty(
             name="Preview in viewport",
             description=("Draw the lines that would be exported in the 3D "
                          "view. Look through the camera: hidden line removal "
@@ -580,27 +580,27 @@ def register_props():
             default=False,
             update=_update_svg_preview
         ),
-        "fp_svg_plot_speed": FloatProperty(
+        "fpm_svg_plot_speed": FloatProperty(
             name="Pen down speed",
             description="Drawing speed in mm/s, used for the time estimate",
             default=80.0, min=1.0, max=2000.0
         ),
-        "fp_svg_travel_speed": FloatProperty(
+        "fpm_svg_travel_speed": FloatProperty(
             name="Travel speed",
             description="Pen-up speed in mm/s, used for the time estimate",
             default=200.0, min=1.0, max=2000.0
         ),
-        "fp_svg_pen_lift": FloatProperty(
+        "fpm_svg_pen_lift": FloatProperty(
             name="Pen lift",
             description="Seconds per pen up/down, used for the time estimate",
             default=0.12, min=0.0, max=5.0
         ),
-        "fp_svg_last_result": StringProperty(
+        "fpm_svg_last_result": StringProperty(
             name="Last export",
             description="Summary of the most recent SVG export",
             default=""
         ),
-        "fp_svg_layers": EnumProperty(
+        "fpm_svg_layers": EnumProperty(
             name="Layers",
             description=("Split the output into SVG layers. vpype and "
                          "Inkscape read these, so you can assign a "
@@ -613,7 +613,7 @@ def register_props():
             ],
             default='NONE'
         ),
-        "fp_svg_outline_layer": BoolProperty(
+        "fpm_svg_outline_layer": BoolProperty(
             name="Outline layer",
             description=("With layers by source, put the edges that actually "
                          "form the outline of the drawing (against the "
@@ -622,13 +622,13 @@ def register_props():
                          "depth buffer, so thin plates do not fill it"),
             default=True
         ),
-        "fp_svg_outline_gap": FloatProperty(
+        "fpm_svg_outline_gap": FloatProperty(
             name="Outline depth step",
             description=("How much deeper one side of an edge must be, "
                          "relative to the edge, to count as an outline"),
             default=0.02, min=0.0, max=1.0, precision=3
         ),
-        "fp_svg_keep_hidden": BoolProperty(
+        "fpm_svg_keep_hidden": BoolProperty(
             name="Keep hidden lines",
             description="Skip hidden-line removal (for diagnosis)",
             default=False
@@ -643,8 +643,8 @@ def register_props():
             logger.info(f"Property already exists: {prop_name}")
 
     # カメラ一括レンダリング対象のチェック(オブジェクト単位)
-    if not hasattr(bpy.types.Object, "fp_cam_render"):
-        bpy.types.Object.fp_cam_render = BoolProperty(
+    if not hasattr(bpy.types.Object, "fpm_cam_render"):
+        bpy.types.Object.fpm_cam_render = BoolProperty(
             name="Render this camera",
             description=(
                 "Include this camera in FreePencil's "
@@ -657,36 +657,36 @@ def unregister_props():
     """プロパティを解除する関数"""
     scene = bpy.types.Scene
     props_to_clear = [
-        "fp_sharp_edges", "fp_sharp_auto", "fp_seam_boundaries",
-        "fp_min_island_area_pct", "fp_sharp_clear",
-        "fp_color_type", "fp_mat_count",
-        "fp_gen_color", "fp_mask_color", "fp_line_color",
-        "fp_mat_color", "fp_bone_color", "fp_enable_compositor_view",
-        "fp_include_antialiasing", "fp_line_sensitivity",
-        "fp_far_relief", "fp_far_relief_radius", "fp_far_relief_threshold",
-        "fp_ch_mecha", "fp_ch_depth", "fp_ch_bone", "fp_ch_gen", "fp_ch_mat",
-        "fp_file_output", "fp_file_output_path",
-        "fp_fo_line", "fp_fo_color", "fp_fo_light", "fp_fo_shadow",
-        "fp_white_preview", "fp_white_keep_glass", "fp_supersample",
-        "fp_auto_sharp", "fp_auto_seam", "fp_auto_merge", "fp_auto_part_tint",
-        "fp_auto_bone", "fp_auto_aa", "fp_auto_hashed", "fp_auto_file_output",
-        "fp_auto_detect_aov", "fp_auto_supersample", "fp_auto_white_preview",
-        "fp_color_noise_scale", "fp_min_neighbor_color_distance",
-        "fp_max_color_retries",
-        "fp_use_random_seed", "fp_color_seed",
-        "fp_bone_grouping_mode", "fp_bone_hard_names", "fp_part_tint",
-        "fp_node_type",
-        "fp_half_color",
-        "fp_svg_page", "fp_svg_margin", "fp_svg_pen",
-        "fp_svg_merge_tolerance", "fp_svg_simplify", "fp_svg_sort",
-        "fp_svg_depth_res", "fp_svg_samples", "fp_svg_bias",
-        "fp_svg_neighbourhood", "fp_svg_keep_hidden",
-        "fp_svg_src_mecha", "fp_svg_src_material", "fp_svg_src_bone",
-        "fp_svg_src_open", "fp_svg_src_silhouette", "fp_svg_respect_paint",
-        "fp_svg_layers", "fp_svg_outline_layer", "fp_svg_outline_gap",
-        "fp_svg_fit", "fp_svg_preview", "fp_svg_plot_speed",
-        "fp_svg_travel_speed", "fp_svg_pen_lift", "fp_svg_last_result",
-        "fp_svg_split_files"
+        "fpm_sharp_edges", "fpm_sharp_auto", "fpm_seam_boundaries",
+        "fpm_min_island_area_pct", "fpm_sharp_clear",
+        "fpm_color_type", "fpm_mat_count",
+        "fpm_gen_color", "fpm_mask_color", "fpm_line_color",
+        "fpm_mat_color", "fpm_bone_color", "fpm_enable_compositor_view",
+        "fpm_include_antialiasing", "fpm_line_sensitivity",
+        "fpm_far_relief", "fpm_far_relief_radius", "fpm_far_relief_threshold",
+        "fpm_ch_mecha", "fpm_ch_depth", "fpm_ch_bone", "fpm_ch_gen", "fpm_ch_mat",
+        "fpm_file_output", "fpm_file_output_path",
+        "fpm_fo_line", "fpm_fo_color", "fpm_fo_light", "fpm_fo_shadow",
+        "fpm_white_preview", "fpm_white_keep_glass", "fpm_supersample",
+        "fpm_auto_sharp", "fpm_auto_seam", "fpm_auto_merge", "fpm_auto_part_tint",
+        "fpm_auto_bone", "fpm_auto_aa", "fpm_auto_hashed", "fpm_auto_file_output",
+        "fpm_auto_detect_aov", "fpm_auto_supersample", "fpm_auto_white_preview",
+        "fpm_color_noise_scale", "fpm_min_neighbor_color_distance",
+        "fpm_max_color_retries",
+        "fpm_use_random_seed", "fpm_color_seed",
+        "fpm_bone_grouping_mode", "fpm_bone_hard_names", "fpm_part_tint",
+        "fpm_node_type",
+        "fpm_half_color",
+        "fpm_svg_page", "fpm_svg_margin", "fpm_svg_pen",
+        "fpm_svg_merge_tolerance", "fpm_svg_simplify", "fpm_svg_sort",
+        "fpm_svg_depth_res", "fpm_svg_samples", "fpm_svg_bias",
+        "fpm_svg_neighbourhood", "fpm_svg_keep_hidden",
+        "fpm_svg_src_mecha", "fpm_svg_src_material", "fpm_svg_src_bone",
+        "fpm_svg_src_open", "fpm_svg_src_silhouette", "fpm_svg_respect_paint",
+        "fpm_svg_layers", "fpm_svg_outline_layer", "fpm_svg_outline_gap",
+        "fpm_svg_fit", "fpm_svg_preview", "fpm_svg_plot_speed",
+        "fpm_svg_travel_speed", "fpm_svg_pen_lift", "fpm_svg_last_result",
+        "fpm_svg_split_files"
     ]
     
     for prop_name in props_to_clear:
@@ -699,8 +699,8 @@ def unregister_props():
         else:
             logger.info(f"Property does not exist: {prop_name}")
 
-    if hasattr(bpy.types.Object, "fp_cam_render"):
+    if hasattr(bpy.types.Object, "fpm_cam_render"):
         try:
-            delattr(bpy.types.Object, "fp_cam_render")
+            delattr(bpy.types.Object, "fpm_cam_render")
         except AttributeError:
-            logger.exception("Failed to clear property: fp_cam_render")
+            logger.exception("Failed to clear property: fpm_cam_render")

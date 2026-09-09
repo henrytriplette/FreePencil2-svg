@@ -168,10 +168,10 @@ def crush_metrics(png: Path, z: np.ndarray, bands=6, z_max=60.0) -> dict:
 def main() -> None:
     fp_batch.install_addon()
     scene = build_corridor()
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 42
-    scene.fp_enable_compositor_view = False
-    scene.fp_supersample = True
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 42
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_supersample = True
     scene.render.resolution_x = scene.render.resolution_y = RES
     scene.render.engine = fp_batch.eevee_engine()
     scene.eevee.taa_render_samples = 16
@@ -190,10 +190,10 @@ def main() -> None:
     bpy.context.view_layer.objects.active = meshes[0]
     relief = float(arg("--relief", "0"))
     if relief > 0:
-        scene.fp_far_relief = relief
-        scene.fp_far_relief_radius = float(arg("--radius", "6"))
-        scene.fp_far_relief_threshold = float(arg("--threshold", "0.35"))
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+        scene.fpm_far_relief = relief
+        scene.fpm_far_relief_radius = float(arg("--radius", "6"))
+        scene.fpm_far_relief_threshold = float(arg("--threshold", "0.35"))
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
     if relief > 0:
         from freepencil2 import fp_core
         n = 0
@@ -201,14 +201,14 @@ def main() -> None:
             if ng.name.startswith(fp_core.NODE_GROUP_PREFIX):
                 n += fp_core.far_relief_from_scene(ng, scene)
         print(f"[far] つぶれ軽減 strength={relief} radius="
-              f"{scene.fp_far_relief_radius} thr="
-              f"{scene.fp_far_relief_threshold} ノード{n}個", flush=True)
+              f"{scene.fpm_far_relief_radius} thr="
+              f"{scene.fpm_far_relief_threshold} ノード{n}個", flush=True)
 
     tag = arg("--tag", "base")
     png = OUT / f"corridor_{tag}.png"
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA"
-    fp_batch.render_still(scene, png, 2 if scene.fp_supersample else 1)
+    fp_batch.render_still(scene, png, 2 if scene.fpm_supersample else 1)
     m = crush_metrics(png, z)
     print("[far] " + json.dumps(m, ensure_ascii=False), flush=True)
     (OUT / f"metrics_{tag}.json").write_text(json.dumps(m, indent=1,

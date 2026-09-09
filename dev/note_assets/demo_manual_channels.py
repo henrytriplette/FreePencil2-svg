@@ -51,17 +51,17 @@ def build(channel: str | None, value: float, tag: str) -> Path:
     bpy.context.view_layer.objects.active = obj
 
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_enable_compositor_view = False
-    scene.fp_supersample = False
-    scene.fp_auto_white_preview = True
-    scene.fp_line_sensitivity = 2.0   # 見本なので線をはっきり出す
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_supersample = False
+    scene.fpm_auto_white_preview = True
+    scene.fpm_line_sensitivity = 2.0   # 見本なので線をはっきり出す
     # 塗る前に AOV を用意する必要があるので自動検出は使わない
-    scene.fp_auto_detect_aov = False
-    scene.fp_mask_color = True
-    scene.fp_line_color = True
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    scene.fpm_auto_detect_aov = False
+    scene.fpm_mask_color = True
+    scene.fpm_line_color = True
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     if channel:
         paint_half(obj, channel, value)

@@ -51,9 +51,9 @@ def fresh_scene_with_islands():
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.join()
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = False  # 固定しきい値の挙動をテストする
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = False  # 固定しきい値の挙動をテストする
     return bpy.context.active_object
 
 
@@ -65,7 +65,7 @@ def get_mecha_colors(obj) -> list[tuple]:
 @test("STEP1 runs headless and creates mecha_color")
 def t1():
     obj = fresh_scene_with_islands()
-    res = bpy.ops.freepencil.auto_vertex_color()
+    res = bpy.ops.fpm.auto_vertex_color()
     assert res == {"FINISHED"}, res
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     assert any("mecha_color" in o.data.color_attributes for o in meshes)
@@ -74,12 +74,12 @@ def t1():
 @test("seed reproducibility: same seed = identical colors")
 def t2():
     fresh_scene_with_islands()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     colors_a = sorted(
         c for o in bpy.context.scene.objects if o.type == "MESH"
         for c in set(get_mecha_colors(o)))
     fresh_scene_with_islands()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     colors_b = sorted(
         c for o in bpy.context.scene.objects if o.type == "MESH"
         for c in set(get_mecha_colors(o)))
@@ -89,13 +89,13 @@ def t2():
 @test("different seed = different colors")
 def t3():
     fresh_scene_with_islands()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     colors_a = sorted(
         c for o in bpy.context.scene.objects if o.type == "MESH"
         for c in set(get_mecha_colors(o)))
     obj = fresh_scene_with_islands()
-    bpy.context.scene.fp_color_seed = 9999
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.context.scene.fpm_color_seed = 9999
+    bpy.ops.fpm.auto_vertex_color()
     colors_b = sorted(
         c for o in bpy.context.scene.objects if o.type == "MESH"
         for c in set(get_mecha_colors(o)))
@@ -105,8 +105,8 @@ def t3():
 @test("adjacent islands respect min color distance (violations = 0)")
 def t4():
     fresh_scene_with_islands()
-    bpy.context.scene.fp_min_neighbor_color_distance = 0.5
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.context.scene.fpm_min_neighbor_color_distance = 0.5
+    bpy.ops.fpm.auto_vertex_color()
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     m = fp_batch.mesh_color_metrics(meshes, 0.5)
     assert m["min_distance_violations"] == 0, m
@@ -116,10 +116,10 @@ def t4():
 def t5():
     from freepencil2 import fp_core
     fresh_scene_with_islands()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     scene = bpy.context.scene
-    scene.fp_include_antialiasing = True
-    scene.fp_node_type = "pro"
+    scene.fpm_include_antialiasing = True
+    scene.fpm_node_type = "pro"
     fp_core.setup_aov(scene, bpy.context.view_layer)
     fp_core.setup_compositor(scene, bpy.context.view_layer)
     assert "mecha_color" in [a.name for a in bpy.context.view_layer.aovs]
@@ -137,11 +137,11 @@ def t5():
 @test("STEP2+STEP3 real operators are headless-safe after fp_core refactor")
 def t6():
     fresh_scene_with_islands()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     scene = bpy.context.scene
-    scene.fp_include_antialiasing = True
-    scene.fp_node_type = "pro"
-    scene.fp_enable_compositor_view = False
+    scene.fpm_include_antialiasing = True
+    scene.fpm_node_type = "pro"
+    scene.fpm_enable_compositor_view = False
     # re-select meshes (STEP1 may have split objects)
     meshes = [o for o in scene.objects if o.type == "MESH"]
     for o in bpy.context.selected_objects:
@@ -149,10 +149,10 @@ def t6():
     for o in meshes:
         o.select_set(True)
     bpy.context.view_layer.objects.active = meshes[0]
-    res2 = bpy.ops.freepencil4.link_button()
+    res2 = bpy.ops.fpm4.link_button()
     assert res2 == {"FINISHED"}, res2
     assert "mecha_color" in [a.name for a in bpy.context.view_layer.aovs]
-    res3 = bpy.ops.freepencil2.link_button()
+    res3 = bpy.ops.fpm2.link_button()
     assert res3 == {"FINISHED"}, res3
     labels = [n.label for n in fp_batch.comp_tree(scene).nodes]
     assert any("pro" in (l or "") for l in labels), labels
@@ -167,7 +167,7 @@ def t7():
     empty_obj = bpy.data.objects.new("FP_EdgeOnly", me)
     bpy.context.scene.collection.objects.link(empty_obj)
     empty_obj.select_set(True)
-    res = bpy.ops.freepencil.auto_vertex_color()
+    res = bpy.ops.fpm.auto_vertex_color()
     assert res == {"FINISHED"}, res
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     assert any("mecha_color" in o.data.color_attributes for o in meshes)
@@ -180,12 +180,12 @@ def t8():
     bpy.ops.wm.read_homefile(use_empty=True)
     bpy.ops.mesh.primitive_cube_add(location=(0, 0, 0))
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = False
-    scene.fp_min_neighbor_color_distance = 0.7
-    scene.fp_max_color_retries = 30
-    bpy.ops.freepencil.auto_vertex_color()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = False
+    scene.fpm_min_neighbor_color_distance = 0.7
+    scene.fpm_max_color_retries = 30
+    bpy.ops.fpm.auto_vertex_color()
     meshes = [o for o in scene.objects if o.type == "MESH"]
     m = fp_batch.mesh_color_metrics(meshes, 0.7)
     assert m["distinct_colors"] >= 3, m
@@ -195,7 +195,7 @@ def t8():
 @test("tiny sliver island merges into its large neighbor (area-based)")
 def t9():
     # 大きな四角形 + 90°に折れた極小の短冊(面積 ~0.01%) = 2島。
-    # 面積比が fp_min_island_area_pct 未満の短冊は隣の大きな島に併合され、
+    # 面積比が fpm_min_island_area_pct 未満の短冊は隣の大きな島に併合され、
     # 色は1色になる(微小島ノイズ線の除去)。
     bpy.ops.wm.read_homefile(use_empty=True)
     me = bpy.data.meshes.new("FP_Sliver")
@@ -209,12 +209,12 @@ def t9():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = False
-    scene.fp_sharp_edges = 60.0
-    scene.fp_min_island_area_pct = 0.02
-    res = bpy.ops.freepencil.auto_vertex_color()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = False
+    scene.fpm_sharp_edges = 60.0
+    scene.fpm_min_island_area_pct = 0.02
+    res = bpy.ops.fpm.auto_vertex_color()
     assert res == {"FINISHED"}, res
     colors = {c for o in bpy.context.scene.objects if o.type == "MESH"
               for c in get_mecha_colors(o)}
@@ -233,12 +233,12 @@ def t9():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = False
-    scene.fp_sharp_edges = 60.0
-    scene.fp_min_island_area_pct = 0.0
-    bpy.ops.freepencil.auto_vertex_color()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = False
+    scene.fpm_sharp_edges = 60.0
+    scene.fpm_min_island_area_pct = 0.0
+    bpy.ops.fpm.auto_vertex_color()
     colors = {c for o in bpy.context.scene.objects if o.type == "MESH"
               for c in get_mecha_colors(o)}
     assert len(colors) == 2, colors
@@ -249,8 +249,8 @@ def t10():
     # 旧乱数リトライ方式では 0.8 で違反が爆発していたケース。
     # グラフ彩色+パレットでは構造的に違反ゼロになること。
     fresh_scene_with_islands()
-    bpy.context.scene.fp_min_neighbor_color_distance = 0.85
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.context.scene.fpm_min_neighbor_color_distance = 0.85
+    bpy.ops.fpm.auto_vertex_color()
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     m = fp_batch.mesh_color_metrics(meshes, 0.85)
     assert m["min_distance_violations"] == 0, m
@@ -259,16 +259,16 @@ def t10():
 
 @test("auto threshold: smooth sphere still gets partition lines")
 def t11():
-    # 一様に滑らかなメッシュ(構造エッジなし)でも fp_sharp_auto なら
+    # 一様に滑らかなメッシュ(構造エッジなし)でも fpm_sharp_auto なら
     # p50付近まで下げて分割線を人工生成し、複数の島色が出ること。
     # 固定60°では島が1つ=1色になるケース。
     bpy.ops.wm.read_homefile(use_empty=True)
     bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2)
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = True
-    bpy.ops.freepencil.auto_vertex_color()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = True
+    bpy.ops.fpm.auto_vertex_color()
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     colors = {c for o in meshes for c in get_mecha_colors(o)}
     assert len(colors) >= 2, colors
@@ -301,13 +301,13 @@ def t12():
     mod.object = arm_obj
 
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = True
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = True
     arm_obj.select_set(False)
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
-    res = bpy.ops.freepencil.auto_vertex_color()
+    res = bpy.ops.fpm.auto_vertex_color()
     assert res == {"FINISHED"}, res
 
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
@@ -327,7 +327,7 @@ def t13():
     #  - 全島色の輝度 <= 0.85(白背景とのシルエット線を保証)
     #  - 色の異なる隣接面の輝度差 >= 0.12(内部線の検出を保証)
     fresh_scene_with_islands()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
 
     def luma(c):
         return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
@@ -358,18 +358,18 @@ def t13():
 
 @test("line sensitivity scales node ramps idempotently")
 def t14():
-    # fp_line_sensitivity はノードグループ内 ColorRamp のしきい値位置を
+    # fpm_line_sensitivity はノードグループ内 ColorRamp のしきい値位置を
     # 一括スケールする。冪等(1.0で完全復元)であること。
     fresh_scene_with_islands()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     scene = bpy.context.scene
-    scene.fp_node_type = "pro"
-    scene.fp_enable_compositor_view = False
-    bpy.ops.freepencil4.link_button()
+    scene.fpm_node_type = "pro"
+    scene.fpm_enable_compositor_view = False
+    bpy.ops.fpm4.link_button()
 
     from freepencil2 import fp_core
-    scene.fp_line_sensitivity = 1.0
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_line_sensitivity = 1.0
+    bpy.ops.fpm2.link_button()
     group = bpy.data.node_groups[f"{fp_core.NODE_GROUP_PREFIX}pro"]
     orig = {n.name: [e.position for e in n.color_ramp.elements]
             for n in group.nodes if n.type == "VALTORGB"}
@@ -382,8 +382,8 @@ def t14():
         el = n.color_ramp.elements
         return len(el) >= 2 and luma(el[0].color) > luma(el[-1].color)
 
-    scene.fp_line_sensitivity = 0.5
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_line_sensitivity = 0.5
+    bpy.ops.fpm2.link_button()
     n_scaled = 0
     for n in group.nodes:
         if n.type != "VALTORGB":
@@ -395,8 +395,8 @@ def t14():
             n_scaled += 1
     assert n_scaled >= 1, "no line ramps found"
 
-    scene.fp_line_sensitivity = 1.0
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_line_sensitivity = 1.0
+    bpy.ops.fpm2.link_button()
     for n in group.nodes:
         if n.type != "VALTORGB":
             continue
@@ -421,10 +421,10 @@ def t15():
     for o in bpy.context.scene.objects:
         o.select_set(o.type == "MESH")
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = True
-    bpy.ops.freepencil.auto_vertex_color()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = True
+    bpy.ops.fpm.auto_vertex_color()
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     m = fp_batch.mesh_color_metrics(meshes, 0.5)
     # 人工分割が出ていれば球内部に隣接ペアが生まれる。ゼロであること
@@ -448,23 +448,23 @@ def t16():
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         scene = bpy.context.scene
-        scene.fp_use_random_seed = False
-        scene.fp_color_seed = 1234
-        scene.fp_sharp_auto = False
-        scene.fp_sharp_edges = 60.0
-        scene.fp_min_island_area_pct = 0.0
+        scene.fpm_use_random_seed = False
+        scene.fpm_color_seed = 1234
+        scene.fpm_sharp_auto = False
+        scene.fpm_sharp_edges = 60.0
+        scene.fpm_min_island_area_pct = 0.0
         return scene
 
     scene = build()
-    scene.fp_seam_boundaries = True
-    bpy.ops.freepencil.auto_vertex_color()
+    scene.fpm_seam_boundaries = True
+    bpy.ops.fpm.auto_vertex_color()
     colors = {c for o in bpy.context.scene.objects if o.type == "MESH"
               for c in get_mecha_colors(o)}
     assert len(colors) == 2, colors
 
     scene = build()
-    scene.fp_seam_boundaries = False
-    bpy.ops.freepencil.auto_vertex_color()
+    scene.fpm_seam_boundaries = False
+    bpy.ops.fpm.auto_vertex_color()
     colors = {c for o in bpy.context.scene.objects if o.type == "MESH"
               for c in get_mecha_colors(o)}
     assert len(colors) == 1, colors
@@ -472,7 +472,7 @@ def t16():
 
 @test("hard boundary bones make a step only when requested")
 def t17():
-    # fp_bone_hard_names に列挙したボーンの境界だけ硬いステップになる
+    # fpm_bone_hard_names に列挙したボーンの境界だけ硬いステップになる
     # (顎下ライン用)。未指定ならウェイトブレンドのまま(多数の中間色)。
     # ボーン名 north/red はハッシュ色の距離が大きいペア(0.52)を事前計算で
     # 選んだもの(近い色のペアだとブレンドの中間色が2桁丸めで潰れて
@@ -502,14 +502,14 @@ def t17():
         mod = obj.modifiers.new("Armature", "ARMATURE")
         mod.object = arm_obj
         scene = bpy.context.scene
-        scene.fp_use_random_seed = False
-        scene.fp_color_seed = 1234
-        scene.fp_sharp_auto = True
-        scene.fp_bone_hard_names = hard
+        scene.fpm_use_random_seed = False
+        scene.fpm_color_seed = 1234
+        scene.fpm_sharp_auto = True
+        scene.fpm_bone_hard_names = hard
         arm_obj.select_set(False)
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-        bpy.ops.freepencil.auto_vertex_color()
+        bpy.ops.fpm.auto_vertex_color()
         colors = set()
         for o in bpy.context.scene.objects:
             if o.type == "MESH" and "bone_color" in o.data.color_attributes:
@@ -528,7 +528,7 @@ def t17():
 @test("part tint separates touching objects sharing a bone")
 def t18():
     # 髪と顔のように「同じボーン支配の別オブジェクト」が接している場合、
-    # fp_part_tint ON なら mecha_color がパーツごとに別の明度帯になり
+    # fpm_part_tint ON なら mecha_color がパーツごとに別の明度帯になり
     # (パーツ境界線の源)、bone_color は ON/OFF に関わらず元の純粋な
     # ウェイトブレンドのまま(パーツ線は mecha 担当、ノードで合成)。
     def build(tint_on):
@@ -552,16 +552,16 @@ def t18():
             mod.object = arm_obj
             objs.append(o)
         scene = bpy.context.scene
-        scene.fp_use_random_seed = False
-        scene.fp_color_seed = 1234
-        scene.fp_sharp_auto = True
-        scene.fp_bone_hard_names = ""
-        scene.fp_part_tint = tint_on
+        scene.fpm_use_random_seed = False
+        scene.fpm_color_seed = 1234
+        scene.fpm_sharp_auto = True
+        scene.fpm_bone_hard_names = ""
+        scene.fpm_part_tint = tint_on
         arm_obj.select_set(False)
         for o in objs:
             o.select_set(True)
         bpy.context.view_layer.objects.active = objs[0]
-        bpy.ops.freepencil.auto_vertex_color()
+        bpy.ops.fpm.auto_vertex_color()
         mecha, bone = [], []
         for o in objs:
             mecha.append(set(get_mecha_colors(o)))
@@ -587,7 +587,7 @@ def t18():
 
 @test("STEP3 file output writes exactly the selected passes")
 def t19():
-    # fp_file_output ON で File Output ノードが追加され、チェックの入った
+    # fpm_file_output ON で File Output ノードが追加され、チェックの入った
     # パスだけがスロットになり配線されること。OFF(既定)では追加されない。
     # v2.5.0 は line/color/Shadow 固定だった。影は EEVEE だとノイズが多く
     # 使えないことが多いのでディフューズ直接光を既定にし、影は任意に。
@@ -599,18 +599,18 @@ def t19():
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         scene = bpy.context.scene
-        scene.fp_use_random_seed = False
-        scene.fp_color_seed = 1234
-        scene.fp_sharp_auto = True
-        bpy.ops.freepencil.auto_vertex_color()
-        bpy.ops.freepencil4.link_button()
-        scene.fp_node_type = "pro"
-        scene.fp_enable_compositor_view = False
-        scene.fp_file_output = enable
-        scene.fp_file_output_path = "//render/"
+        scene.fpm_use_random_seed = False
+        scene.fpm_color_seed = 1234
+        scene.fpm_sharp_auto = True
+        bpy.ops.fpm.auto_vertex_color()
+        bpy.ops.fpm4.link_button()
+        scene.fpm_node_type = "pro"
+        scene.fpm_enable_compositor_view = False
+        scene.fpm_file_output = enable
+        scene.fpm_file_output_path = "//render/"
         for k, v in flags.items():
             setattr(scene, k, v)
-        bpy.ops.freepencil2.link_button()
+        bpy.ops.fpm2.link_button()
         tree = fp_batch.comp_tree(scene)
         return [n for n in tree.nodes if n.type == "OUTPUT_FILE"], tree
 
@@ -628,7 +628,7 @@ def t19():
     assert src in ("DiffDir", "Diffuse Direct"), src
 
     # 影を足す
-    fos, tree = build(True, fp_fo_shadow=True)
+    fos, tree = build(True, fpm_fo_shadow=True)
     assert fp_batch.fo_slot_names(fos[0]) == {"line", "color", "light", "shadow"}
     linked = {lk.to_socket.name for lk in tree.links if lk.to_node == fos[0]}
     assert "shadow" in linked, linked
@@ -638,12 +638,12 @@ def t19():
     assert src == "Shadow", src
 
     # 線だけ
-    fos, tree = build(True, fp_fo_color=False, fp_fo_light=False)
+    fos, tree = build(True, fpm_fo_color=False, fpm_fo_light=False)
     assert fp_batch.fo_slot_names(fos[0]) == {"line"},         fp_batch.fo_slot_names(fos[0])
 
     # 全部外したらノード自体を作らない
-    fos, _ = build(True, fp_fo_line=False, fp_fo_color=False,
-                   fp_fo_light=False, fp_fo_shadow=False)
+    fos, _ = build(True, fpm_fo_line=False, fpm_fo_color=False,
+                   fpm_fo_light=False, fpm_fo_shadow=False)
     assert not fos, "no pass selected -> no File Output node"
 
     fos, _ = build(False)
@@ -668,20 +668,20 @@ def t20():
         cam.rotation_euler = (1.5708, 0, 0 if name == "CamA" else 1.5708)
         scene.collection.objects.link(cam)
         cams[name] = cam
-    cams["CamB"].fp_cam_render = False
+    cams["CamB"].fpm_cam_render = False
     scene.camera = cams["CamB"]
 
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = True
-    bpy.ops.freepencil.auto_vertex_color()
-    bpy.ops.freepencil4.link_button()
-    scene.fp_node_type = "pro"
-    scene.fp_enable_compositor_view = False
-    scene.fp_file_output = True
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = True
+    bpy.ops.fpm.auto_vertex_color()
+    bpy.ops.fpm4.link_button()
+    scene.fpm_node_type = "pro"
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_file_output = True
+    bpy.ops.fpm2.link_button()
     scene.render.resolution_x = 64
     scene.render.resolution_y = 48
 
@@ -691,7 +691,7 @@ def t20():
         fo = next(n for n in fp_batch.comp_tree(scene).nodes
                   if n.bl_idname == "CompositorNodeOutputFile")
         orig_path = fp_batch.fo_dir(fo)
-        bpy.ops.freepencil.render_cameras()
+        bpy.ops.fpm.render_cameras()
         root = tmp / "camera_renders"
         cam_a = root / "01_CamA"
         assert cam_a.is_dir(), sorted(p.name for p in root.iterdir())
@@ -740,12 +740,12 @@ def t21():
     obj.data.materials.append(mat)
 
     scene.render.film_transparent = False
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
     for o in bpy.context.selected_objects:
         o.select_set(False)  # 無選択 → 表示メッシュ自動選択の経路
 
-    bpy.ops.freepencil.auto_setup()
+    bpy.ops.fpm.auto_setup()
 
     assert "mecha_color" in obj.data.color_attributes.keys() or \
         "mecha_color" in [c.name for c in obj.data.color_attributes], \
@@ -754,7 +754,7 @@ def t21():
         "rigged mesh must get bone_color"
     aovs = [a.name for a in bpy.context.view_layer.aovs]
     assert "bone_color" in aovs, f"bone AOV must be auto-enabled: {aovs}"
-    assert scene.fp_supersample is True and \
+    assert scene.fpm_supersample is True and \
         scene.render.resolution_percentage == 200, \
         "full auto must enable 2x supersampling by default"
     assert any(n.type == "GROUP" for n in fp_batch.comp_tree(scene).nodes), \
@@ -768,40 +768,40 @@ def t21():
     mat2.use_nodes = True
     mat2.blend_method = "BLEND"
     obj.data.materials.append(mat2)
-    scene.fp_auto_hashed = False
-    scene.fp_auto_bone = False
-    scene.fp_bone_color = False
-    bpy.ops.freepencil.auto_setup()
+    scene.fpm_auto_hashed = False
+    scene.fpm_auto_bone = False
+    scene.fpm_bone_color = False
+    bpy.ops.fpm.auto_setup()
     assert mat2.blend_method == "BLEND", \
         "hashed conversion must be skipped when toggled off"
-    assert scene.fp_bone_color is False, \
+    assert scene.fpm_bone_color is False, \
         "bone AOV auto-detect must be skipped when toggled off"
-    scene.fp_auto_hashed = True
-    scene.fp_auto_bone = True
+    scene.fpm_auto_hashed = True
+    scene.fpm_auto_bone = True
 
-    # AOVの完全自動設定: mask_color に黒以外を塗る → fp_mask_color 自動ON。
+    # AOVの完全自動設定: mask_color に黒以外を塗る → fpm_mask_color 自動ON。
     # 未塗り(STEP1が作る既定の黒のみ)の line_color は手動ONでも OFF になる。
-    # マテリアルID加算が有効 → fp_mat_color 連動ON。検出トグルOFFなら何もしない
+    # マテリアルID加算が有効 → fpm_mat_color 連動ON。検出トグルOFFなら何もしない
     attr = obj.data.color_attributes.get("mask_color") \
         or obj.data.color_attributes.new("mask_color", "BYTE_COLOR", "CORNER")
     attr.data[0].color = (1.0, 1.0, 1.0, 1.0)  # 実際に塗る
-    scene.fp_mask_color = False
-    scene.fp_mat_count = True
-    scene.fp_mat_color = False
-    scene.fp_auto_detect_aov = False
-    bpy.ops.freepencil.auto_setup()
-    assert scene.fp_mask_color is False, "detection must be skippable"
-    scene.fp_auto_detect_aov = True
-    scene.fp_line_color = True  # 手動ONだが line_color は未塗り → 自動がOFFへ
-    bpy.ops.freepencil.auto_setup()
-    assert scene.fp_mask_color is True, "painted mask_color must enable its AOV"
-    assert scene.fp_mat_color is True, "mat AOV must follow material ID"
-    assert scene.fp_line_color is False, \
+    scene.fpm_mask_color = False
+    scene.fpm_mat_count = True
+    scene.fpm_mat_color = False
+    scene.fpm_auto_detect_aov = False
+    bpy.ops.fpm.auto_setup()
+    assert scene.fpm_mask_color is False, "detection must be skippable"
+    scene.fpm_auto_detect_aov = True
+    scene.fpm_line_color = True  # 手動ONだが line_color は未塗り → 自動がOFFへ
+    bpy.ops.fpm.auto_setup()
+    assert scene.fpm_mask_color is True, "painted mask_color must enable its AOV"
+    assert scene.fpm_mat_color is True, "mat AOV must follow material ID"
+    assert scene.fpm_line_color is False, \
         "auto must own AOV config: unpainted line_color turns off"
     aovs = [a.name for a in bpy.context.view_layer.aovs]
     assert "mask_color" in aovs and "mat_color" in aovs, aovs
     assert "line_color" not in aovs, aovs
-    scene.fp_mat_count = False
+    scene.fpm_mat_count = False
 
 
 @test("per-channel strength sliders retune ramps live and idempotently")
@@ -815,55 +815,55 @@ def t22():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = True
-    bpy.ops.freepencil.auto_vertex_color()
-    bpy.ops.freepencil4.link_button()
-    scene.fp_node_type = "pro"
-    scene.fp_enable_compositor_view = False
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = True
+    bpy.ops.fpm.auto_vertex_color()
+    bpy.ops.fpm4.link_button()
+    scene.fpm_node_type = "pro"
+    scene.fpm_enable_compositor_view = False
+    bpy.ops.fpm2.link_button()
 
     group = bpy.data.node_groups["FreePencil_v1_1_0_pro"]
     depth = group.nodes["ColorRamp.001"]
     bone = group.nodes["ColorRamp.002"]
     # 基準は「感度1.0のときの位置」。既定が 0.5 になったので、
     # 明示しないと基準自体がずれて以降の掛け算が合わなくなる
-    scene.fp_line_sensitivity = 1.0
+    scene.fpm_line_sensitivity = 1.0
     base_depth = depth.color_ramp.elements[1].position
     base_bone = bone.color_ramp.elements[1].position
 
-    scene.fp_ch_depth = 2.0  # updateコールバックで即反映
+    scene.fpm_ch_depth = 2.0  # updateコールバックで即反映
     assert abs(depth.color_ramp.elements[1].position - base_depth / 2) < 1e-4
     assert abs(bone.color_ramp.elements[1].position - base_bone) < 1e-4, \
         "other channels must be unaffected"
 
-    scene.fp_ch_depth = 1.0  # 冪等に復元
+    scene.fpm_ch_depth = 1.0  # 冪等に復元
     assert abs(depth.color_ramp.elements[1].position - base_depth) < 1e-4
 
-    scene.fp_line_sensitivity = 0.5  # 全体感度と乗算
-    scene.fp_ch_depth = 2.0
+    scene.fpm_line_sensitivity = 0.5  # 全体感度と乗算
+    scene.fpm_ch_depth = 2.0
     assert abs(depth.color_ramp.elements[1].position - base_depth / 4) < 1e-4
 
-    scene.fp_ch_depth = 0.0  # OFF
+    scene.fpm_ch_depth = 0.0  # OFF
     assert depth.color_ramp.elements[1].position >= 0.999
     # 位置1.0では強エッジ(勾配>1)が残るため、OFFは色ごと白にする
     assert all(abs(v - 1.0) < 1e-5
                for v in depth.color_ramp.elements[1].color[:3]), \
         "OFF must whiten the ramp color (gradients can exceed 1.0)"
 
-    scene.fp_line_sensitivity = 1.0
-    scene.fp_ch_depth = 1.0
+    scene.fpm_line_sensitivity = 1.0
+    scene.fpm_ch_depth = 1.0
     assert abs(depth.color_ramp.elements[1].position - base_depth) < 1e-4
     assert depth.color_ramp.elements[1].color[1] < 0.5, \
         "original dark color must be restored after OFF"
 
     # STEP3 再生成でもシーン値が反映される
-    scene.fp_ch_depth = 2.0
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_ch_depth = 2.0
+    bpy.ops.fpm2.link_button()
     depth = bpy.data.node_groups["FreePencil_v1_1_0_pro"].nodes["ColorRamp.001"]
     assert abs(depth.color_ramp.elements[1].position - base_depth / 2) < 1e-4
-    scene.fp_ch_depth = 1.0
+    scene.fpm_ch_depth = 1.0
 
 
 @test("white preview toggles a compositor mix, materials untouched")
@@ -882,17 +882,17 @@ def t23():
     bpy.context.view_layer.objects.active = obj
 
     # コンポジタツリーが無い状態では安全に何もしない
-    scene.fp_white_preview = True
-    scene.fp_white_preview = False
+    scene.fpm_white_preview = True
+    scene.fpm_white_preview = False
 
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = True
-    bpy.ops.freepencil.auto_vertex_color()
-    bpy.ops.freepencil4.link_button()
-    scene.fp_node_type = "pro"
-    scene.fp_enable_compositor_view = False
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = True
+    bpy.ops.fpm.auto_vertex_color()
+    bpy.ops.fpm4.link_button()
+    scene.fpm_node_type = "pro"
+    scene.fpm_enable_compositor_view = False
+    bpy.ops.fpm2.link_button()
 
     tree = fp_batch.comp_tree(scene)
 
@@ -900,7 +900,7 @@ def t23():
         return next((n for n in tree.nodes
                      if n.label == "FP_WhitePreviewMix"), None)
 
-    scene.fp_white_preview = True
+    scene.fpm_white_preview = True
     mix = mix_node()
     assert mix is not None, "mix node must be inserted"
     assert mix.inputs[0].default_value == 1.0
@@ -914,7 +914,7 @@ def t23():
         "materials must be untouched"
     assert red.use_nodes is False or True  # マテリアルに変更を加えない方式
 
-    scene.fp_white_preview = False
+    scene.fpm_white_preview = False
     assert mix_node().inputs[0].default_value == 0.0, "factor back to zero"
     assert obj.material_slots[0].material.name == "FP_T23_Red"
 
@@ -941,14 +941,14 @@ def t24():
     d = bpy.data.objects.new("FP_T24_D", c.data)
     scene.collection.objects.link(d)
 
-    scene.fp_white_preview = True
+    scene.fpm_white_preview = True
     for o in (a, b):
         assert o.material_slots[0].material.name == "FP_T24_Red", \
             "slots must never change in compositor mode"
     assert len(c.data.materials) == 0, \
         "compositor mode must not add slots either"
 
-    scene.fp_white_preview = False
+    scene.fpm_white_preview = False
 
     # 旧スワップ方式の汚染バックアップ(兄弟が白を元として保存)の自己修復
     white = bpy.data.materials.new("FP_White_Preview")
@@ -956,8 +956,8 @@ def t24():
         slot.material = white
     a["fp_orig_mats"] = ["FP_T24_Red"]
     b["fp_orig_mats"] = ["FP_White_Preview"]  # 汚染
-    scene.fp_white_preview = True   # プロパティを立ててから
-    scene.fp_white_preview = False  # OFFでレガシー復元パスを通す
+    scene.fpm_white_preview = True   # プロパティを立ててから
+    scene.fpm_white_preview = False  # OFFでレガシー復元パスを通す
     mats = [s.material.name if s.material else "" for s in a.material_slots]
     assert mats == ["FP_T24_Red"], f"poisoned backup must not win: {mats}"
 
@@ -972,17 +972,17 @@ def t25():
     obj = bpy.context.active_object
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = True
-    bpy.ops.freepencil.auto_vertex_color()
-    bpy.ops.freepencil4.link_button()
-    scene.fp_node_type = "pro"
-    scene.fp_enable_compositor_view = False
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = True
+    bpy.ops.fpm.auto_vertex_color()
+    bpy.ops.fpm4.link_button()
+    scene.fpm_node_type = "pro"
+    scene.fpm_enable_compositor_view = False
+    bpy.ops.fpm2.link_button()
 
-    scene.fp_white_preview = True
-    bpy.ops.freepencil2.link_button()  # STEP3 再生成
+    scene.fpm_white_preview = True
+    bpy.ops.fpm2.link_button()  # STEP3 再生成
     tree = fp_batch.comp_tree(scene)
     mix = next((n for n in tree.nodes
                 if n.label == "FP_WhitePreviewMix"), None)
@@ -991,13 +991,13 @@ def t25():
     grp = next(n for n in tree.nodes if n.type == "GROUP")
     assert grp.inputs["Image"].links[0].from_node == mix
 
-    scene.fp_white_preview = False
+    scene.fpm_white_preview = False
     assert mix.inputs[0].default_value == 0.0
 
 
 @test("2x supersampling wires half-scale into composite and file output")
 def t26():
-    # fp_supersample ON: 解像度200% + Composite/File Output の直前に
+    # fpm_supersample ON: 解像度200% + Composite/File Output の直前に
     # 0.5 RELATIVE スケールが入る。OFFで再生成すると解像度100%に戻り
     # スケールノードも消える。
     bpy.ops.wm.read_homefile(use_empty=True)
@@ -1006,16 +1006,16 @@ def t26():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_auto = True
-    bpy.ops.freepencil.auto_vertex_color()
-    bpy.ops.freepencil4.link_button()
-    scene.fp_node_type = "pro"
-    scene.fp_enable_compositor_view = False
-    scene.fp_file_output = True
-    scene.fp_supersample = True
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_auto = True
+    bpy.ops.fpm.auto_vertex_color()
+    bpy.ops.fpm4.link_button()
+    scene.fpm_node_type = "pro"
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_file_output = True
+    scene.fpm_supersample = True
+    bpy.ops.fpm2.link_button()
 
     tree = fp_batch.comp_tree(scene)
     assert scene.render.resolution_percentage == 200
@@ -1034,8 +1034,8 @@ def t26():
         assert sock.links[0].from_node.type == "SCALE", \
             f"file output slot {sock.name} must be scaled"
 
-    scene.fp_supersample = False
-    bpy.ops.freepencil2.link_button()
+    scene.fpm_supersample = False
+    bpy.ops.fpm2.link_button()
     tree = fp_batch.comp_tree(scene)
     assert scene.render.resolution_percentage == 100
     assert not any(n.type == "SCALE" for n in tree.nodes), \
@@ -1056,8 +1056,8 @@ def t27():
     for o in bpy.context.scene.objects:
         o.select_set(True)
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
 
     gen, state = vertex_color.make_vertex_color_gen(bpy.context, quiet=True)
     steps = []
@@ -1084,7 +1084,7 @@ def t27():
     # background では invoke() -> execute() に落ちる(モーダルを張らない)
     bpy.ops.wm.read_homefile(use_empty=True)
     obj = fresh_scene_with_islands()
-    res = bpy.ops.freepencil.auto_vertex_color("INVOKE_DEFAULT")
+    res = bpy.ops.fpm.auto_vertex_color("INVOKE_DEFAULT")
     assert res == {"FINISHED"}, res
     assert "mecha_color" in obj.data.color_attributes.keys()
 
@@ -1093,7 +1093,7 @@ def t27():
     o = bpy.context.active_object
     o.select_set(True)
     bpy.context.view_layer.objects.active = o
-    res = bpy.ops.freepencil.auto_setup("INVOKE_DEFAULT")
+    res = bpy.ops.fpm.auto_setup("INVOKE_DEFAULT")
     assert res == {"FINISHED"}, res
     assert fp_batch.comp_tree() is not None, "STEP0 must still reach STEP3"
 
@@ -1112,14 +1112,14 @@ def t28():
     bpy.context.view_layer.objects.active = obj
 
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_enable_compositor_view = False
-    assert scene.fp_auto_white_preview is True, "must default to on"
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_enable_compositor_view = False
+    assert scene.fpm_auto_white_preview is True, "must default to on"
 
-    bpy.ops.freepencil.auto_setup()
+    bpy.ops.fpm.auto_setup()
 
-    assert scene.fp_white_preview is True, "STEP0 must leave white preview on"
+    assert scene.fpm_white_preview is True, "STEP0 must leave white preview on"
     tree = fp_batch.comp_tree(scene)
     mix = next((n for n in tree.nodes if n.label == "FP_WhitePreviewMix"), None)
     assert mix is not None, "white preview mix must be wired by STEP0"
@@ -1137,12 +1137,12 @@ def t28():
     o2.select_set(True)
     bpy.context.view_layer.objects.active = o2
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_enable_compositor_view = False
-    scene.fp_auto_white_preview = False
-    bpy.ops.freepencil.auto_setup()
-    assert scene.fp_white_preview is False, \
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_auto_white_preview = False
+    bpy.ops.fpm.auto_setup()
+    assert scene.fpm_white_preview is False, \
         "toggle off must leave the white preview alone"
 
 
@@ -1176,14 +1176,14 @@ def t29():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_sharp_clear = False      # シャープを尊重する既定の経路
-    scene.fp_sharp_auto = False
-    scene.fp_sharp_edges = 179.0      # 角度では絶対に割れない設定に
-    scene.fp_min_island_area_pct = 0.0
-    scene.fp_seam_boundaries = False
-    res = bpy.ops.freepencil.auto_vertex_color()
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_sharp_clear = False      # シャープを尊重する既定の経路
+    scene.fpm_sharp_auto = False
+    scene.fpm_sharp_edges = 179.0      # 角度では絶対に割れない設定に
+    scene.fpm_min_island_area_pct = 0.0
+    scene.fpm_seam_boundaries = False
+    res = bpy.ops.fpm.auto_vertex_color()
     assert res == {"FINISHED"}, res
 
     # メッシュは無改変(ここが以前は書き換わって復元されていた)
@@ -1308,7 +1308,7 @@ def t32():
         f'!= bl_info blender={freepencil2.bl_info["blender"]}')
 
     # パネル見出しに出る文字列も同じ番号であること
-    label = bpy.types.FREEPENCIL_PT_LINE.bl_label
+    label = bpy.types.FPM_PT_LINE.bl_label
     assert label.endswith(".".join(map(str, ver))), label
 
 
@@ -1385,9 +1385,9 @@ def t35():
     bpy.ops.mesh.primitive_cube_add()
     bpy.context.active_object.select_set(True)
     scene = bpy.context.scene
-    scene.fp_node_type = "pro"
-    scene.fp_enable_compositor_view = False
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    scene.fpm_node_type = "pro"
+    scene.fpm_enable_compositor_view = False
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     def rect(n):
         w = n.width or 140.0
@@ -1442,14 +1442,14 @@ def t36():
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         scene = bpy.context.scene
-        scene.fp_use_random_seed = False
-        scene.fp_color_seed = 1234
-        scene.fp_enable_compositor_view = False
-        scene.fp_supersample = False
-        scene.fp_auto_detect_aov = False
-        scene.fp_mask_color = True
-        scene.fp_line_color = True
-        bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+        scene.fpm_use_random_seed = False
+        scene.fpm_color_seed = 1234
+        scene.fpm_enable_compositor_view = False
+        scene.fpm_supersample = False
+        scene.fpm_auto_detect_aov = False
+        scene.fpm_mask_color = True
+        scene.fpm_line_color = True
+        bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
         if channel:
             attr = obj.data.color_attributes[channel]
             n = len(attr.data)
@@ -1497,9 +1497,9 @@ def t37():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     scene = bpy.context.scene
-    scene.fp_enable_compositor_view = False
-    scene.fp_auto_detect_aov = False
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_auto_detect_aov = False
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     group = next(g for g in bpy.data.node_groups
                  if g.name.startswith(fp_core.NODE_GROUP_PREFIX))
@@ -1557,9 +1557,9 @@ def t38():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     scene = bpy.context.scene
-    scene.fp_enable_compositor_view = False
-    scene.fp_auto_detect_aov = False
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_auto_detect_aov = False
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     tree = compat.get_compositor_tree(scene)
     n_before = len(tree.nodes)
@@ -1598,13 +1598,13 @@ def t39():
 
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_enable_compositor_view = False
-    scene.fp_auto_detect_aov = False
-    scene.fp_file_output = True
-    scene.fp_supersample = True          # ← 200% + 0.5 縮小
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_auto_detect_aov = False
+    scene.fpm_file_output = True
+    scene.fpm_supersample = True          # ← 200% + 0.5 縮小
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     scene.render.resolution_x = 64
     scene.render.resolution_y = 48
@@ -1614,7 +1614,7 @@ def t39():
     tmp = Path(tempfile.mkdtemp(prefix="fp_t39_"))
     try:
         bpy.ops.wm.save_as_mainfile(filepath=str(tmp / "t39.blend"))
-        bpy.ops.freepencil.render_cameras()
+        bpy.ops.fpm.render_cameras()
         cam_dir = tmp / "camera_renders" / "01_Cam"
         pngs = sorted(cam_dir.glob("*.png"))
         assert pngs, sorted(p.name for p in cam_dir.iterdir())
@@ -1635,12 +1635,12 @@ def _svg_scene():
     bpy.ops.wm.read_homefile(use_empty=True)
     bpy.ops.mesh.primitive_monkey_add(size=2.0)
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
     objs = [o for o in scene.objects if o.type == "MESH"]
     fp_batch.apply_white_material(objs)
     fp_batch.select_meshes()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     fp_batch.setup_camera_and_light()
     scene.render.resolution_x = 400
     scene.render.resolution_y = 300
@@ -1787,7 +1787,7 @@ def t46():
     objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     fp_batch.apply_white_material(objs)
     fp_batch.select_meshes()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
 
     tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
     try:
@@ -1817,8 +1817,8 @@ def t47():
     from freepencil2 import svg_export, compat
 
     _svg_scene()
-    bpy.ops.freepencil4.link_button()
-    bpy.ops.freepencil2.link_button()
+    bpy.ops.fpm4.link_button()
+    bpy.ops.fpm2.link_button()
     scene = bpy.context.scene
     tree = compat.get_compositor_tree(scene)
     before = len(tree.nodes) if tree else 0
@@ -1942,7 +1942,7 @@ def t51():
     objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     fp_batch.apply_white_material(objs)
     fp_batch.select_meshes()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     fp_batch.setup_camera_and_light()
 
     tmp = Path(tempfile.mkdtemp(prefix="fp_svg_"))
@@ -2044,7 +2044,7 @@ def t54():
     objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     fp_batch.apply_white_material(objs)
     fp_batch.select_meshes()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     fp_batch.setup_camera_and_light()
 
     scene = bpy.context.scene
@@ -2248,7 +2248,7 @@ def t59():
     bpy.ops.wm.read_homefile(use_empty=True)
     scene = bpy.context.scene
     for key, spec in svg_export.SVG_PRESETS.items():
-        res = bpy.ops.freepencil.svg_preset(preset=key)
+        res = bpy.ops.fpm.svg_preset(preset=key)
         assert res == {"FINISHED"}, res
         for name, want in spec["values"].items():
             got = getattr(scene, name)
@@ -2279,9 +2279,9 @@ def t60():
         blend = tmp / "scene.blend"
         bpy.ops.wm.save_as_mainfile(filepath=str(blend))
         scene = bpy.context.scene
-        scene.fp_svg_depth_res = 320
+        scene.fpm_svg_depth_res = 320
 
-        res = bpy.ops.freepencil.export_svg_cameras()
+        res = bpy.ops.fpm.export_svg_cameras()
         assert res == {"FINISHED"}, res
 
         out = Path(bpy.path.abspath("//svg_exports"))
@@ -2311,12 +2311,12 @@ def t61():
         objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
         fp_batch.apply_white_material(objs)
         fp_batch.select_meshes()
-        bpy.ops.freepencil.auto_vertex_color()
+        bpy.ops.fpm.auto_vertex_color()
 
         scene = bpy.context.scene
-        scene.fp_node_type = node_type
-        assert bpy.ops.freepencil4.link_button() == {"FINISHED"}
-        assert bpy.ops.freepencil2.link_button() == {"FINISHED"}
+        scene.fpm_node_type = node_type
+        assert bpy.ops.fpm4.link_button() == {"FINISHED"}
+        assert bpy.ops.fpm2.link_button() == {"FINISHED"}
 
         name = f"{fp_core.NODE_GROUP_PREFIX}{node_type}"
         ng = bpy.data.node_groups.get(name)

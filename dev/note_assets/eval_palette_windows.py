@@ -11,7 +11,7 @@
   - パーツ内の隣接輝度差 (= 線の出やすさ)。span = 幅/(k-1)
   - パーツ間の輝度分離 (= 接するパーツ境界に線が出るか)
   - 白背景 1.0 との差 (= シルエット線)
-  - RGB 最小ペア距離 (= fp_min_neighbor_color_distance の契約)
+  - RGB 最小ペア距離 (= fpm_min_neighbor_color_distance の契約)
 
   blender -b --factory-startup --python eval_palette_windows.py
 """

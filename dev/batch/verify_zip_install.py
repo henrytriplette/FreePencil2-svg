@@ -52,13 +52,13 @@ try:
         f"この Blender は最低バージョン {mmin} を満たさない"
 
     # パネルが登録され、見出しの版番号が一致すること
-    label = bpy.types.FREEPENCIL_PT_LINE.bl_label
+    label = bpy.types.FPM_PT_LINE.bl_label
     rec["panel_label"] = label
     assert label.endswith(mver), (label, mver)
 
     # 主要オペレータが呼べる状態か
-    ops = ["freepencil.auto_setup", "freepencil.auto_vertex_color",
-           "freepencil4.link_button", "freepencil2.link_button"]
+    ops = ["fpm.auto_setup", "fpm.auto_vertex_color",
+           "fpm4.link_button", "fpm2.link_button"]
     missing = []
     for path in ops:
         head, tail = path.split(".")
@@ -70,7 +70,7 @@ try:
     # 実際に1回通す(立方体で STEP0)
     bpy.ops.mesh.primitive_cube_add()
     bpy.context.active_object.select_set(True)
-    res = bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    res = bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
     rec["auto_setup"] = list(res)
     assert "FINISHED" in res, res
     rec["node_groups"] = [g.name for g in bpy.data.node_groups]

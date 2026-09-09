@@ -13,7 +13,7 @@ from . import fp_core
 
 class LINK_MAKE_FP_OT_NODE(bpy.types.Operator):
     """Create a sample compositor node group for FreePencil."""
-    bl_idname = "freepencil2.link_button"
+    bl_idname = "fpm2.link_button"
     bl_label = "freepencil2"
     bl_description = "Generate Sample Node"
     bl_options = {'REGISTER', 'UNDO'}
@@ -59,7 +59,7 @@ class LINK_MAKE_FP_OT_NODE(bpy.types.Operator):
         self.report({'INFO'}, summary)
         show_message(summary, title="STEP3")
 
-        if context.scene.fp_enable_compositor_view:
+        if context.scene.fpm_enable_compositor_view:
             if compat.HAS_AOV_IN_VIEWPORT_COMPOSITOR:
                 for area in context.screen.areas:
                     if area.type == 'VIEW_3D':

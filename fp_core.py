@@ -26,11 +26,11 @@ NODE_GROUP_PREFIX = "FreePencil_v1_1_0_"
 # 影は EEVEE だとノイズが多く実用に耐えないことが多いので既定 OFF。
 # 代わりにディフューズの直接光を既定 ON にしている。
 FILE_OUTPUT_PASSES = (
-    ("fp_fo_line", "line", ("group", "line")),
-    ("fp_fo_color", "color", ("group", "color")),
-    ("fp_fo_light", "light",
+    ("fpm_fo_line", "line", ("group", "line")),
+    ("fpm_fo_color", "color", ("group", "color")),
+    ("fpm_fo_light", "light",
      ("pass", "use_pass_diffuse_direct", compat.DIFFUSE_DIRECT_SOCKETS)),
-    ("fp_fo_shadow", "shadow", ("pass", "use_pass_shadow", ("Shadow",))),
+    ("fpm_fo_shadow", "shadow", ("pass", "use_pass_shadow", ("Shadow",))),
 )
 
 
@@ -261,14 +261,14 @@ def far_relief_from_scene(group: bpy.types.NodeTree,
                           scene: bpy.types.Scene) -> int:
     return apply_far_relief(
         group,
-        strength=getattr(scene, "fp_far_relief", 0.0),
-        radius=getattr(scene, "fp_far_relief_radius", 6.0),
-        threshold=getattr(scene, "fp_far_relief_threshold", 0.35))
+        strength=getattr(scene, "fpm_far_relief", 0.0),
+        radius=getattr(scene, "fpm_far_relief_radius", 6.0),
+        threshold=getattr(scene, "fpm_far_relief_threshold", 0.35))
 
 
 def channel_strengths_from_scene(scene: bpy.types.Scene) -> dict:
     """シーンプロパティ fp_ch_* からチャンネル別強さの辞書を作る。"""
-    return {ch: getattr(scene, f"fp_ch_{ch}", 1.0)
+    return {ch: getattr(scene, f"fpm_ch_{ch}", 1.0)
             for ch in CHANNEL_RAMP_NODES}
 
 
@@ -453,7 +453,7 @@ def setup_aov(scene: bpy.types.Scene,
               "materials": 0, "aovs": []}
 
     mat_total = 0
-    if scene.fp_mat_count:
+    if scene.fpm_mat_count:
         for m in bpy.data.materials:
             if not m.grease_pencil or m.use_nodes:
                 m.pass_index = mat_total
@@ -482,7 +482,7 @@ def setup_aov(scene: bpy.types.Scene,
             g.location = (10, 400)
             g.width = 240
             result["materials"] += 1
-            if scene.fp_mat_count:
+            if scene.fpm_mat_count:
                 g.node_tree.nodes["Map Range"].inputs[2].default_value = mat_total
 
     def ensure_aov(name, enable):
@@ -497,11 +497,11 @@ def setup_aov(scene: bpy.types.Scene,
             result["aovs"].append(name)
 
     ensure_aov("mecha_color", True)
-    ensure_aov("gen_color", scene.fp_gen_color)
-    ensure_aov("mask_color", scene.fp_mask_color)
-    ensure_aov("line_color", scene.fp_line_color)
-    ensure_aov("mat_color", scene.fp_mat_color)
-    ensure_aov("bone_color", scene.fp_bone_color)
+    ensure_aov("gen_color", scene.fpm_gen_color)
+    ensure_aov("mask_color", scene.fpm_mask_color)
+    ensure_aov("line_color", scene.fpm_line_color)
+    ensure_aov("mat_color", scene.fpm_mat_color)
+    ensure_aov("bone_color", scene.fpm_bone_color)
 
     scene.render.film_transparent = True
     scene.view_settings.view_transform = 'Standard'
@@ -511,17 +511,17 @@ def setup_aov(scene: bpy.types.Scene,
 def setup_compositor(scene: bpy.types.Scene,
                      view_layer: bpy.types.ViewLayer) -> str:
     """STEP3 core: build the RenderLayers -> FreePencil group -> Composite
-    tree for the node type selected in scene.fp_node_type.
+    tree for the node type selected in scene.fpm_node_type.
 
     Returns the node group name that was wired in.
     """
-    node_ver_name = f"{NODE_GROUP_PREFIX}{scene.fp_node_type}"
+    node_ver_name = f"{NODE_GROUP_PREFIX}{scene.fpm_node_type}"
 
     utils_nodegroup.ensure_node_group_updated(node_ver_name)
 
     # 線感度(既定1.0=従来挙動)。冪等なので毎回適用してよい
     apply_line_tuning(bpy.data.node_groups[node_ver_name],
-                      getattr(scene, "fp_line_sensitivity", 1.0),
+                      getattr(scene, "fpm_line_sensitivity", 1.0),
                       channel_strengths_from_scene(scene))
     # 遠景つぶれ軽減(既定0.0=何も挿さない)。これも冪等
     far_relief_from_scene(bpy.data.node_groups[node_ver_name], scene)
@@ -541,7 +541,7 @@ def setup_compositor(scene: bpy.types.Scene,
 
     # 必要なレンダーパスは RenderLayers ノードを作る前に有効化しておく。
     # 後から有効化するとソケットがまだ生えていない
-    if getattr(scene, "fp_file_output", False):
+    if getattr(scene, "fpm_file_output", False):
         for _prop, _slot, source in selected_file_output_passes(scene):
             if source[0] == "pass":
                 setattr(view_layer, source[1], True)
@@ -574,7 +574,7 @@ def setup_compositor(scene: bpy.types.Scene,
             tree,
             group_node.outputs[0],
             comp.inputs[0],
-            scene.fp_include_antialiasing,
+            scene.fpm_include_antialiasing,
             threshold=0.1,
             contrast_limit=0.2,
         )
@@ -599,12 +599,12 @@ def setup_compositor(scene: bpy.types.Scene,
 
     # ファイル出力: チェックの入ったパスを個別PNGで書き出す
     selected = selected_file_output_passes(scene)
-    if getattr(scene, "fp_file_output", False) and selected:
+    if getattr(scene, "fpm_file_output", False) and selected:
         fo = tree.nodes.new("CompositorNodeOutputFile")
         fo.label = node_ver_name  # 再生成時のクリーンアップ対象
         fo.location = (640, 150)
         compat.file_output_set_dir(
-            fo, getattr(scene, "fp_file_output_path", "//render/"))
+            fo, getattr(scene, "fpm_file_output_path", "//render/"))
         compat.file_output_clear_slots(fo)
         for _prop, slot_name, _source in selected:
             compat.file_output_add_slot(fo, slot_name, 'PNG', 'RGBA')
@@ -628,7 +628,7 @@ def setup_compositor(scene: bpy.types.Scene,
     # レンダリング中だけ 0.5 にする案を試したが、それだとプレビューの線が
     # 細線化されなくなる。細さの確認こそがプレビューの目的なので、
     # 表示が小さくなる方を受け入れる(常時 0.5 のまま)。
-    if getattr(scene, "fp_supersample", False):
+    if getattr(scene, "fpm_supersample", False):
         scene.render.resolution_percentage = 200
 
         def _insert_half_scale(to_socket):
@@ -656,7 +656,7 @@ def setup_compositor(scene: bpy.types.Scene,
         scene.render.resolution_percentage = 100
 
     # 白プレビュー中に STEP3 を再生成した場合は Mix(白) を挿入し直す
-    if getattr(scene, "fp_white_preview", False):
+    if getattr(scene, "fpm_white_preview", False):
         set_white_preview(scene, True)
 
     # 最後に配置を整える。座標はエクスポート元 .blend の手配置がそのまま
@@ -675,5 +675,5 @@ def setup_compositor(scene: bpy.types.Scene,
         "passes": [slot for _p, slot, _src in selected_file_output_passes(scene)]
                   if fo is not None else [],
         "file_output_dir": compat.file_output_get_dir(fo) if fo else "",
-        "relief": getattr(scene, "fp_far_relief", 0.0),
+        "relief": getattr(scene, "fpm_far_relief", 0.0),
     }

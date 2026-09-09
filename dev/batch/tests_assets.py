@@ -61,14 +61,14 @@ def run_step1(blend: Path, sharp_auto: bool = True) -> list:
     scene = bpy.context.scene
     objs, _others = fp_batch.append_objects(blend)
     assert objs, "no meshes"
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 42
-    scene.fp_sharp_auto = sharp_auto
-    scene.fp_sharp_edges = 60.0
-    scene.fp_min_island_area_pct = 0.02
-    scene.fp_min_neighbor_color_distance = 0.5
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 42
+    scene.fpm_sharp_auto = sharp_auto
+    scene.fpm_sharp_edges = 60.0
+    scene.fpm_min_island_area_pct = 0.02
+    scene.fpm_min_neighbor_color_distance = 0.5
     fp_batch.select_meshes()
-    res = bpy.ops.freepencil.auto_vertex_color()
+    res = bpy.ops.fpm.auto_vertex_color()
     assert res == {"FINISHED"}, res
     return [o for o in scene.objects if o.type == "MESH"]
 

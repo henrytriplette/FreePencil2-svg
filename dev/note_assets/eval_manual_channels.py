@@ -50,18 +50,18 @@ def build(paint_value):
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 1234
-    scene.fp_enable_compositor_view = False
-    scene.fp_supersample = False
-    scene.fp_auto_white_preview = True
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_supersample = False
+    scene.fpm_auto_white_preview = True
     # 自動検出だと「まだ塗っていない」チャンネルのAOVが作られないので、
     # 対象チャンネルは明示的に有効化する(STEP4の実運用では塗ってから
     # STEP0/STEP2 をやり直すか、STEP2でチェックを入れる形になる)
-    scene.fp_auto_detect_aov = False
-    scene.fp_mask_color = True
-    scene.fp_line_color = True
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    scene.fpm_auto_detect_aov = False
+    scene.fpm_mask_color = True
+    scene.fpm_line_color = True
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     if paint_value is not None:
         paint(obj, CHANNEL, paint_value)

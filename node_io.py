@@ -645,7 +645,7 @@ def _import_impl(ctx, nt_type: str, operator_self, filepath):
 
 # --- Compositor
 class NODE_OT_export_group_to_python(Operator, ExportHelper):
-    bl_idname = "node.export_group_to_python"
+    bl_idname = "fpm.export_node_group_to_python"
     bl_label = "Export Group to Python"
     filename_ext = ".py"
     bl_options = {'REGISTER', 'UNDO'}
@@ -664,7 +664,7 @@ class NODE_OT_export_group_to_python(Operator, ExportHelper):
         return {'CANCELLED'}
 
 class NODE_OT_import_group_from_python(Operator, ImportHelper):
-    bl_idname = "node.import_group_from_python"
+    bl_idname = "fpm.import_node_group_from_python"
     bl_label = "Import Group from Python"
     filename_ext = ".py"
     bl_options = {'REGISTER', 'UNDO'}
@@ -681,7 +681,7 @@ class NODE_OT_import_group_from_python(Operator, ImportHelper):
             return {'FINISHED'}
         return {'CANCELLED'}
 
-class NODE_PT_export_python_panel(Panel):
+class FPM_PT_node_export_python(Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
     bl_category = "Node Tools"
@@ -694,12 +694,12 @@ class NODE_PT_export_python_panel(Panel):
     def draw(self, ctx):
         col = self.layout.column(align=True)
         col.operator(
-            "node.export_group_to_python",
+            "fpm.export_node_group_to_python",
             text=bpy.app.translations.pgettext("Export Group to Python"),
             icon='EXPORT',
         )
         col.operator(
-            "node.import_group_from_python",
+            "fpm.import_node_group_from_python",
             text=bpy.app.translations.pgettext("Import Group from Python"),
             icon='IMPORT',
         )
@@ -709,7 +709,7 @@ class NODE_PT_export_python_panel(Panel):
 
 # --- Shader
 class SHADER_OT_export_group_to_python(Operator, ExportHelper):
-    bl_idname = "shader.export_group_to_python"
+    bl_idname = "fpm.export_shader_group_to_python"
     bl_label = "Export Shader Group to Python"
     filename_ext = ".py"
     bl_options = {'REGISTER', 'UNDO'}
@@ -728,7 +728,7 @@ class SHADER_OT_export_group_to_python(Operator, ExportHelper):
         return {'CANCELLED'}
 
 class SHADER_OT_import_group_from_python(Operator, ImportHelper):
-    bl_idname = "shader.import_group_from_python"
+    bl_idname = "fpm.import_shader_group_from_python"
     bl_label = "Import Shader Group to Python"
     filename_ext = ".py"
     bl_options = {'REGISTER', 'UNDO'}
@@ -745,7 +745,7 @@ class SHADER_OT_import_group_from_python(Operator, ImportHelper):
             return {'FINISHED'}
         return {'CANCELLED'}
 
-class SHADER_PT_export_python_panel(Panel):
+class FPM_PT_shader_export_python(Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
     bl_category = "Node Tools"
@@ -758,12 +758,12 @@ class SHADER_PT_export_python_panel(Panel):
     def draw(self, ctx):
         col = self.layout.column(align=True)
         col.operator(
-            "shader.export_group_to_python",
+            "fpm.export_shader_group_to_python",
             text=bpy.app.translations.pgettext("Export Group to Python"),
             icon='EXPORT',
         )
         col.operator(
-            "shader.import_group_from_python",
+            "fpm.import_shader_group_from_python",
             text=bpy.app.translations.pgettext("Import Group from Python"),
             icon='IMPORT',
         )

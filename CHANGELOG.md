@@ -38,7 +38,7 @@
   the five (color separation / material / bone / open edges / silhouette)
   can be switched off on its own.
 
-  `bone` is off by default, unlike the raster path where `fp_ch_bone` is
+  `bone` is off by default, unlike the raster path where `fpm_ch_bone` is
   1.0: bone boundaries add a lot of lines for a plotter.
 
   Depth discontinuity is deliberately not a source. In vector form a depth
@@ -70,7 +70,7 @@
 - **Outline layer from the depth buffer.** With layers by source, the edges
   that actually form the outline of the drawing go into their own `outline`
   layer. Each edge is probed to either side in the depth pass: if one side
-  is background, or drops away by more than `fp_svg_outline_gap` relative
+  is background, or drops away by more than `fpm_svg_outline_gap` relative
   to the edge, it is an outline edge.
 
   This classifies existing edges rather than adding any, so the drawn
@@ -136,7 +136,7 @@
   Found by installing 5.2.1 and running the suite; the export is now
   verified there.
 
-- **STEP3 failed on Blender 5.x with the default node type.** `fp_node_type`
+- **STEP3 failed on Blender 5.x with the default node type.** `fpm_node_type`
   defaults to `test`, and the 4.x script for that group assigned to
   `CompositorNodeFilter.inputs[0]`. The sockets were reordered in 5.x
   (4.x: `Fac, Image`; 5.x: `Image, Factor, Type`), so that assignment hit
@@ -148,6 +148,28 @@
   4.5, open the file in 5.2 so Blender migrates it, export the result. The
   4.x script is untouched, so 4.x behaviour cannot change. Pre-existing
   since v2.5.0.
+
+- **Separate registration namespace, so this can be enabled alongside the
+  original add-on.** Changing the extension id alone was not enough: both
+  add-ons still registered the same operator ids, panel ids and `fp_*`
+  scene properties, so only whichever loaded last stayed live.
+
+  - operators `freepencil*.` -> `fpm*.`
+  - panels `FREEPENCIL_PT_*` -> `FPM_PT_*`, and the three panels that had
+    no explicit `bl_idname` (so registered under their class name) renamed
+  - the node/shader group export operators moved out of Blender's own
+    `node.` / `shader.` namespaces, where they were identical to upstream
+  - all 80 scene properties and `fp_cam_render`: `fp_*` -> `fpm_*`
+  - sidebar tab is now "FreePencil SVG"
+
+  Measured with both add-ons installed and enabled at once: 60 registered
+  types (30 each) and 160 scene properties (80 each), with both panel,
+  operator and property sets live. Before the change it was 30 and 80,
+  with one add-on shadowing the other.
+
+  **Settings do not carry over from the original add-on**, since the
+  property names differ. Node group and vertex colour layer names are
+  deliberately unchanged, so both read the same painted meshes.
 
 ### Notes
 - The raster pipeline (STEP0-STEP5) is unchanged and remains fully
@@ -509,7 +531,7 @@
   material blend modes), applies recommended settings and runs STEP1-3.
 - Part tint (mecha color): touching objects get different brightness bands
   so part boundaries (hairline, collar, assembly seams) become lines.
-- Hard boundary bones (`fp_bone_hard_names`): comma-separated bone names
+- Hard boundary bones (`fpm_bone_hard_names`): comma-separated bone names
   whose weight region is painted with the dominant color only, producing a
   line at the boundary (e.g. "head,neck" for a jaw line).
 - Auto edge angle (STEP1): per-object sharp-edge threshold from the

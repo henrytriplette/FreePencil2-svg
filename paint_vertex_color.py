@@ -7,7 +7,7 @@ from . import utils
 # オペレーター本体
 # ------------------------------------------------------------
 class LINK_MAKE_FP_OT_VCOLOR(bpy.types.Operator):
-    bl_idname      = "freepencil3.link_button"
+    bl_idname      = "fpm3.link_button"
     bl_label       = "Paint Vertex Color"
     bl_description = "Paint Vertex Color"
     bl_options     = {'REGISTER', 'UNDO'}
@@ -34,7 +34,7 @@ class LINK_MAKE_FP_OT_VCOLOR(bpy.types.Operator):
                 return {'CANCELLED'}
 
         # 3) プルダウン値（identifier = レイヤー名）
-        color_type = context.scene.fp_color_type
+        color_type = context.scene.fpm_color_type
 
         # 4) ペイントモード準備
         for o in sel:

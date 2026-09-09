@@ -33,7 +33,7 @@ fp_batch.apply_white_material(objs)
 fp_batch.select_meshes()
 
 t0 = time.perf_counter()
-res = bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+res = bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 elapsed = time.perf_counter() - t0
 
 print("[time_step0] " + json.dumps({

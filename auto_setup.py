@@ -42,7 +42,7 @@ def _channel_painted(objs, name: str) -> bool:
 
 class FP_OT_AUTO_SETUP(vertex_color.FPProgressModalMixin, bpy.types.Operator):
     """Analyze the scene, apply recommended settings and run STEP1-3."""
-    bl_idname = "freepencil.auto_setup"
+    bl_idname = "fpm.auto_setup"
     bl_label = "Auto Setup"
     bl_description = (
         "Analyze the scene, apply recommended settings and run "
@@ -80,31 +80,31 @@ class FP_OT_AUTO_SETUP(vertex_color.FPProgressModalMixin, bpy.types.Operator):
         view_layer.objects.active = targets[0]
 
         # --- おすすめ設定(STEP0 のチェックが入っている項目のみ適用) ---
-        if scene.fp_auto_sharp:
-            scene.fp_sharp_auto = True
-        if scene.fp_auto_seam:
-            scene.fp_seam_boundaries = True
-        if scene.fp_auto_merge:
-            scene.fp_min_island_area_pct = 0.02
-        if scene.fp_auto_part_tint:
-            scene.fp_part_tint = True
-        scene.fp_bone_grouping_mode = 'basename'
+        if scene.fpm_auto_sharp:
+            scene.fpm_sharp_auto = True
+        if scene.fpm_auto_seam:
+            scene.fpm_seam_boundaries = True
+        if scene.fpm_auto_merge:
+            scene.fpm_min_island_area_pct = 0.02
+        if scene.fpm_auto_part_tint:
+            scene.fpm_part_tint = True
+        scene.fpm_bone_grouping_mode = 'basename'
         has_rig = any(
             m.type == 'ARMATURE' and m.show_viewport and m.object
             for o in targets for m in o.modifiers)
-        if scene.fp_auto_bone:
-            scene.fp_bone_color = has_rig
+        if scene.fpm_auto_bone:
+            scene.fpm_bone_color = has_rig
         # 線の強さも自動化に含める。ここを触らないと、古いファイルに
         # 残った 1.0 がそのまま使われて線が弱いままになる
-        scene.fp_line_sensitivity = 0.5
-        scene.fp_node_type = 'pro'
-        if scene.fp_auto_aa:
-            scene.fp_include_antialiasing = True
-        if scene.fp_auto_supersample:
+        scene.fpm_line_sensitivity = 0.5
+        scene.fpm_node_type = 'pro'
+        if scene.fpm_auto_aa:
+            scene.fpm_include_antialiasing = True
+        if scene.fpm_auto_supersample:
             # 細線化はFreePencilの品質の要(縮小しないと線が太い)
-            scene.fp_supersample = True
-        if scene.fp_auto_file_output:
-            scene.fp_file_output = True
+            scene.fpm_supersample = True
+        if scene.fpm_auto_file_output:
+            scene.fpm_file_output = True
 
         # AOVの完全自動設定: STEP2 の手動チェックには依存せず、
         # シーンから判定して ON/OFF 両方を決める(自動がAOV構成を所有)。
@@ -112,14 +112,14 @@ class FP_OT_AUTO_SETUP(vertex_color.FPProgressModalMixin, bpy.types.Operator):
         #   mat          = マテリアルID加算が有効か
         #   (mecha=常時、bone=リグ検出は上で設定済み)
         detected = []
-        if scene.fp_auto_detect_aov:
+        if scene.fpm_auto_detect_aov:
             for ch in ("gen_color", "mask_color", "line_color"):
                 on = _channel_painted(targets, ch)
-                setattr(scene, f"fp_{ch}", on)
+                setattr(scene, f"fpm_{ch}", on)
                 if on:
                     detected.append(ch)
-            scene.fp_mat_color = bool(scene.fp_mat_count)
-            if scene.fp_mat_color:
+            scene.fpm_mat_color = bool(scene.fpm_mat_count)
+            if scene.fpm_mat_color:
                 detected.append("mat_color")
 
         # STEP2 が film_transparent を True にするが、マテリアル/背景を
@@ -133,20 +133,20 @@ class FP_OT_AUTO_SETUP(vertex_color.FPProgressModalMixin, bpy.types.Operator):
         """STEP1 完了後: STEP2(AOV)/STEP3(PROノード)と後始末。"""
         scene = context.scene
 
-        bpy.ops.freepencil4.link_button()
-        bpy.ops.freepencil2.link_button()
+        bpy.ops.fpm4.link_button()
+        bpy.ops.fpm2.link_button()
 
         scene.render.film_transparent = info["film_transparent"]
 
         # 白マテリアルでプレビュー。線画がすぐ見える状態にして終わる。
         # コンポジタ切替方式なのでマテリアル自体は触らない。必ず STEP3 で
         # コンポジタが建った後に立てること(先に立てても差し込む先が無い)
-        if scene.fp_auto_white_preview and not scene.fp_white_preview:
-            scene.fp_white_preview = True
+        if scene.fpm_auto_white_preview and not scene.fpm_white_preview:
+            scene.fpm_white_preview = True
 
         # BLEND は AOV が書かれない → 本物のガラス以外は HASHED へ
         hashed = 0
-        if scene.fp_auto_hashed:
+        if scene.fpm_auto_hashed:
             for m in bpy.data.materials:
                 if getattr(m, "blend_method", "OPAQUE") != "BLEND":
                     continue
@@ -172,7 +172,7 @@ class FP_OT_AUTO_SETUP(vertex_color.FPProgressModalMixin, bpy.types.Operator):
         info = self._prepare(context)
         if info is None:
             return {'CANCELLED'}
-        bpy.ops.freepencil.auto_vertex_color()
+        bpy.ops.fpm.auto_vertex_color()
         return self._finish(context, info)
 
     def invoke(self, context, event):

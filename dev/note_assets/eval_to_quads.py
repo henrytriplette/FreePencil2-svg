@@ -42,10 +42,10 @@ def run(model: dict, to_quads: bool) -> dict:
         return {}
     fp_batch.normalize(meshes + others, meshes)
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 42
-    scene.fp_enable_compositor_view = False
-    scene.fp_auto_detect_aov = False
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 42
+    scene.fpm_enable_compositor_view = False
+    scene.fpm_auto_detect_aov = False
     scene.fp_to_quads = to_quads
 
     before = sum(len(o.data.polygons) for o in meshes)
@@ -56,7 +56,7 @@ def run(model: dict, to_quads: bool) -> dict:
 
     import time
     t = time.time()
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
     secs = time.time() - t
     after = sum(len(o.data.polygons) for o in meshes)
 

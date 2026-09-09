@@ -27,10 +27,10 @@ class FP_PT_Line(bpy.types.Panel):
     """Main sidebar panel (parent of the collapsible sections)."""
 
     bl_label = f"FreePencil v{'.'.join(map(str, ADDON_VERSION))}"
-    bl_idname = "FREEPENCIL_PT_LINE"
+    bl_idname = "FPM_PT_LINE"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "FreePencil"
+    bl_category = "FreePencil SVG"
 
     def draw(self, context):
         # 4.2 は限定対応。レンダリングは動くがライブプレビューが出ないので、
@@ -52,8 +52,8 @@ class _FPSub:
 
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "FreePencil"
-    bl_parent_id = "FREEPENCIL_PT_LINE"
+    bl_category = "FreePencil SVG"
+    bl_parent_id = "FPM_PT_LINE"
     # 初期状態は STEP0(全自動)だけ開く。STEP1〜5 は通常の手順では
     # 触らないので、全部開いていると縦に長くなり STEP0 が埋もれる。
     # DEFAULT_CLOSED が効くのは初回表示時だけで、以降はユーザーの
@@ -84,7 +84,7 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
     """
 
     bl_label = "SVG Export (pen plotter)"
-    bl_idname = "FREEPENCIL_PT_SVG"
+    bl_idname = "FPM_PT_SVG"
     bl_order = -1
     bl_options = set()      # 主機能なので既定で開く
 
@@ -112,16 +112,16 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
                 layout.label(text=f"{t('Preview')}: {info}", icon="INFO")
 
         col = layout.column(align=True)
-        col.prop(scene, "fp_svg_page", text=t("Page"))
-        col.prop(scene, "fp_svg_fit", text=t("Fit"))
-        col.prop(scene, "fp_svg_margin", text=t("Margin (mm)"))
-        col.prop(scene, "fp_svg_pen", text=t("Pen width (mm)"))
+        col.prop(scene, "fpm_svg_page", text=t("Page"))
+        col.prop(scene, "fpm_svg_fit", text=t("Fit"))
+        col.prop(scene, "fpm_svg_margin", text=t("Margin (mm)"))
+        col.prop(scene, "fpm_svg_pen", text=t("Pen width (mm)"))
 
         col = layout.column(align=True)
-        col.prop(scene, "fp_svg_layers", text=t("Layers"))
+        col.prop(scene, "fpm_svg_layers", text=t("Layers"))
         sub = col.row(align=True)
-        sub.enabled = scene.fp_svg_layers != "NONE"
-        sub.prop(scene, "fp_svg_split_files", text=t("One file per layer"))
+        sub.enabled = scene.fpm_svg_layers != "NONE"
+        sub.prop(scene, "fpm_svg_split_files", text=t("One file per layer"))
 
         layout.operator(FP_OT_EXPORT_SVG.bl_idname,
                         text=t("Export SVG"), icon="EXPORT")
@@ -133,8 +133,8 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
             layout.label(text=t("Save the .blend to batch cameras"),
                          icon="INFO")
 
-        if scene.fp_svg_last_result:
-            for line in scene.fp_svg_last_result.split("|"):
+        if scene.fpm_svg_last_result:
+            for line in scene.fpm_svg_last_result.split("|"):
                 layout.label(text=line, icon="DOT")
 
 
@@ -142,28 +142,28 @@ class FP_PT_SvgSources(_FPSub, bpy.types.Panel):
     """どの辺を線にするか。"""
 
     bl_label = "Line sources"
-    bl_idname = "FREEPENCIL_PT_SVG_SOURCES"
-    bl_parent_id = "FREEPENCIL_PT_SVG"
+    bl_idname = "FPM_PT_SVG_SOURCES"
+    bl_parent_id = "FPM_PT_SVG"
     bl_order = 0
 
     def draw(self, context):
         t = bpy.app.translations.pgettext
         scene = context.scene
         col = self.layout.column(align=True)
-        col.prop(scene, "fp_svg_src_mecha", text=t("Color separation"))
-        col.prop(scene, "fp_svg_src_material", text=t("Material boundaries"))
-        col.prop(scene, "fp_svg_src_bone", text=t("Bone boundaries"))
-        col.prop(scene, "fp_svg_src_open", text=t("Open edges"))
-        col.prop(scene, "fp_svg_src_silhouette", text=t("Silhouette"))
-        col.prop(scene, "fp_svg_respect_paint", text=t("Honour STEP4 paint"))
+        col.prop(scene, "fpm_svg_src_mecha", text=t("Color separation"))
+        col.prop(scene, "fpm_svg_src_material", text=t("Material boundaries"))
+        col.prop(scene, "fpm_svg_src_bone", text=t("Bone boundaries"))
+        col.prop(scene, "fpm_svg_src_open", text=t("Open edges"))
+        col.prop(scene, "fpm_svg_src_silhouette", text=t("Silhouette"))
+        col.prop(scene, "fpm_svg_respect_paint", text=t("Honour STEP4 paint"))
 
 
 class FP_PT_SvgAdvanced(_FPSub, bpy.types.Panel):
     """一度決めたら普段は触らない設定。"""
 
     bl_label = "Advanced"
-    bl_idname = "FREEPENCIL_PT_SVG_ADVANCED"
-    bl_parent_id = "FREEPENCIL_PT_SVG"
+    bl_idname = "FPM_PT_SVG_ADVANCED"
+    bl_parent_id = "FPM_PT_SVG"
     bl_order = 1
 
     def draw(self, context):
@@ -173,34 +173,34 @@ class FP_PT_SvgAdvanced(_FPSub, bpy.types.Panel):
 
         col = layout.column(align=True)
         col.label(text=t("Paths"))
-        col.prop(scene, "fp_svg_merge_tolerance", text=t("Merge (mm)"))
-        col.prop(scene, "fp_svg_simplify", text=t("Simplify (mm)"))
-        col.prop(scene, "fp_svg_sort", text=t("Sort draw order"))
+        col.prop(scene, "fpm_svg_merge_tolerance", text=t("Merge (mm)"))
+        col.prop(scene, "fpm_svg_simplify", text=t("Simplify (mm)"))
+        col.prop(scene, "fpm_svg_sort", text=t("Sort draw order"))
 
         col = layout.column(align=True)
         col.label(text=t("Outline layer"))
-        col.enabled = scene.fp_svg_layers == "SOURCE"
-        col.prop(scene, "fp_svg_outline_layer", text=t("Outline layer"))
-        col.prop(scene, "fp_svg_outline_gap", text=t("Outline depth step"))
+        col.enabled = scene.fpm_svg_layers == "SOURCE"
+        col.prop(scene, "fpm_svg_outline_layer", text=t("Outline layer"))
+        col.prop(scene, "fpm_svg_outline_gap", text=t("Outline depth step"))
 
         col = layout.column(align=True)
         col.label(text=t("Hidden line removal"))
-        col.prop(scene, "fp_svg_depth_res", text=t("Depth resolution"))
-        col.prop(scene, "fp_svg_samples", text=t("Samples per edge"))
-        col.prop(scene, "fp_svg_bias", text=t("Depth bias"))
-        col.prop(scene, "fp_svg_neighbourhood", text=t("Neighbourhood"))
-        col.prop(scene, "fp_svg_keep_hidden", text=t("Keep hidden lines"))
+        col.prop(scene, "fpm_svg_depth_res", text=t("Depth resolution"))
+        col.prop(scene, "fpm_svg_samples", text=t("Samples per edge"))
+        col.prop(scene, "fpm_svg_bias", text=t("Depth bias"))
+        col.prop(scene, "fpm_svg_neighbourhood", text=t("Neighbourhood"))
+        col.prop(scene, "fpm_svg_keep_hidden", text=t("Keep hidden lines"))
 
         col = layout.column(align=True)
         col.label(text=t("Plot estimate"))
-        col.prop(scene, "fp_svg_plot_speed", text=t("Pen down mm/s"))
-        col.prop(scene, "fp_svg_travel_speed", text=t("Travel mm/s"))
-        col.prop(scene, "fp_svg_pen_lift", text=t("Pen lift (s)"))
+        col.prop(scene, "fpm_svg_plot_speed", text=t("Pen down mm/s"))
+        col.prop(scene, "fpm_svg_travel_speed", text=t("Travel mm/s"))
+        col.prop(scene, "fpm_svg_pen_lift", text=t("Pen lift (s)"))
 
 
 class FP_PT_Step0(_FPSub, bpy.types.Panel):
     bl_label = "STEP0: Full Auto"
-    bl_idname = "FREEPENCIL_PT_STEP0"
+    bl_idname = "FPM_PT_STEP0"
     bl_order = 0
     bl_options = set()  # ここだけ既定で開く
 
@@ -211,26 +211,26 @@ class FP_PT_Step0(_FPSub, bpy.types.Panel):
         col = layout.column(align=True)
         col.label(text=t("Recommended settings for this scene"), icon="INFO")
         col = layout.column(align=True)
-        col.prop(scene, "fp_auto_sharp", text=t("Auto edge angle"))
-        col.prop(scene, "fp_auto_seam", text=t("Seam/material boundaries"))
-        col.prop(scene, "fp_auto_merge", text=t("Merge small islands"))
-        col.prop(scene, "fp_auto_part_tint", text=t("Part tint"))
-        col.prop(scene, "fp_auto_bone", text=t("Bone AOV by rig detection"))
-        col.prop(scene, "fp_auto_aa", text=t("Anti-aliasing"))
-        col.prop(scene, "fp_auto_supersample",
+        col.prop(scene, "fpm_auto_sharp", text=t("Auto edge angle"))
+        col.prop(scene, "fpm_auto_seam", text=t("Seam/material boundaries"))
+        col.prop(scene, "fpm_auto_merge", text=t("Merge small islands"))
+        col.prop(scene, "fpm_auto_part_tint", text=t("Part tint"))
+        col.prop(scene, "fpm_auto_bone", text=t("Bone AOV by rig detection"))
+        col.prop(scene, "fpm_auto_aa", text=t("Anti-aliasing"))
+        col.prop(scene, "fpm_auto_supersample",
                  text=t("2x supersampling (thin lines)"))
-        col.prop(scene, "fp_auto_hashed", text=t("BLEND to HASHED (keep glass)"))
-        col.prop(scene, "fp_auto_detect_aov", text=t("Auto AOVs from scene"))
-        col.prop(scene, "fp_auto_white_preview",
+        col.prop(scene, "fpm_auto_hashed", text=t("BLEND to HASHED (keep glass)"))
+        col.prop(scene, "fpm_auto_detect_aov", text=t("Auto AOVs from scene"))
+        col.prop(scene, "fpm_auto_white_preview",
                  text=t("White material preview"))
-        col.prop(scene, "fp_auto_file_output", text=t("Enable File Output"))
+        col.prop(scene, "fpm_auto_file_output", text=t("Enable File Output"))
         layout.operator(FP_OT_AUTO_SETUP.bl_idname,
                         text=t("Auto setup (STEP1-3)"), icon="AUTO")
 
 
 class FP_PT_Step1(_FPSub, bpy.types.Panel):
     bl_label = "STEP1: Auto Vertex Color"
-    bl_idname = "FREEPENCIL_PT_STEP1"
+    bl_idname = "FPM_PT_STEP1"
     bl_order = 1
 
     def draw(self, context):
@@ -239,35 +239,35 @@ class FP_PT_Step1(_FPSub, bpy.types.Panel):
         scene = context.scene
 
         col = layout.column(align=True)
-        col.prop(scene, "fp_mat_count", text=t("Add the material ID"))
+        col.prop(scene, "fpm_mat_count", text=t("Add the material ID"))
 
         # --- 島分割 ---
         box = layout.box()
         box.label(text=t("Island split:"), icon="MOD_EDGESPLIT")
         col = box.column(align=True)
-        col.prop(scene, "fp_sharp_auto", text=t("Auto edge angle"))
+        col.prop(scene, "fpm_sharp_auto", text=t("Auto edge angle"))
         row = col.row(align=True)
-        row.enabled = not scene.fp_sharp_auto
-        row.prop(scene, "fp_sharp_edges", slider=True, text=t("Edge Angle"))
-        col.prop(scene, "fp_seam_boundaries", text=t("Seam/material boundaries"))
-        col.prop(scene, "fp_min_island_area_pct", text=t("Min island area %"))
+        row.enabled = not scene.fpm_sharp_auto
+        row.prop(scene, "fpm_sharp_edges", slider=True, text=t("Edge Angle"))
+        col.prop(scene, "fpm_seam_boundaries", text=t("Seam/material boundaries"))
+        col.prop(scene, "fpm_min_island_area_pct", text=t("Min island area %"))
 
         # --- ボーン(キャラ用) ---
         box = layout.box()
         box.label(text=t("Bone options:"), icon="BONE_DATA")
         col = box.column(align=True)
-        col.prop(scene, "fp_bone_grouping_mode", text=t("Bone grouping"))
-        col.prop(scene, "fp_bone_hard_names", text=t("Hard boundary bones"))
-        col.prop(scene, "fp_part_tint", text=t("Part tint (mecha color)"))
+        col.prop(scene, "fpm_bone_grouping_mode", text=t("Bone grouping"))
+        col.prop(scene, "fpm_bone_hard_names", text=t("Hard boundary bones"))
+        col.prop(scene, "fpm_part_tint", text=t("Part tint (mecha color)"))
 
         # --- 配色シード(再現性) ---
         box = layout.box()
         box.label(text=t("Color seed:"), icon="FILE_REFRESH")
         col = box.column(align=True)
-        col.prop(scene, "fp_use_random_seed", text=t("Random seed each run"))
+        col.prop(scene, "fpm_use_random_seed", text=t("Random seed each run"))
         row = col.row(align=True)
-        row.enabled = not scene.fp_use_random_seed
-        row.prop(scene, "fp_color_seed", text=t("Seed"))
+        row.enabled = not scene.fpm_use_random_seed
+        row.prop(scene, "fpm_color_seed", text=t("Seed"))
         row.operator(FREEPENCIL_OT_randomize_seed.bl_idname,
                      text="", icon="FILE_REFRESH")
 
@@ -278,7 +278,7 @@ class FP_PT_Step1(_FPSub, bpy.types.Panel):
 
 class FP_PT_Step2(_FPSub, bpy.types.Panel):
     bl_label = "STEP2: AOV"
-    bl_idname = "FREEPENCIL_PT_STEP2"
+    bl_idname = "FPM_PT_STEP2"
     bl_order = 2
 
     def draw(self, context):
@@ -287,20 +287,20 @@ class FP_PT_Step2(_FPSub, bpy.types.Panel):
         scene = context.scene
 
         col = layout.column(align=True)
-        col.prop(scene, "fp_bone_color", text=t("AOV Bone Color"))
-        col.prop(scene, "fp_gen_color", text=t("AOV Generate Color"))
-        col.prop(scene, "fp_mask_color",
+        col.prop(scene, "fpm_bone_color", text=t("AOV Bone Color"))
+        col.prop(scene, "fpm_gen_color", text=t("AOV Generate Color"))
+        col.prop(scene, "fpm_mask_color",
                  text=t("AOV Mask Color(paint to erase lines)"))
-        col.prop(scene, "fp_line_color",
+        col.prop(scene, "fpm_line_color",
                  text=t("AOV Line Color(line darkness)"))
-        col.prop(scene, "fp_mat_color", text=t("AOV Material Boundary Color"))
+        col.prop(scene, "fpm_mat_color", text=t("AOV Material Boundary Color"))
         layout.operator(LINK_MAKE_FP_OT_AOV_NODE.bl_idname,
                         text=t("Generate AOV Node"), icon="NODETREE")
 
 
 class FP_PT_Step3(_FPSub, bpy.types.Panel):
     bl_label = "STEP3: Node Generation"
-    bl_idname = "FREEPENCIL_PT_STEP3"
+    bl_idname = "FPM_PT_STEP3"
     bl_order = 3
 
     def draw(self, context):
@@ -309,64 +309,64 @@ class FP_PT_Step3(_FPSub, bpy.types.Panel):
         scene = context.scene
 
         col = layout.column(align=True)
-        col.prop(scene, "fp_node_type", text=t("Select Node Type"))
+        col.prop(scene, "fpm_node_type", text=t("Select Node Type"))
         # 4.2 のビューポートコンポジタは AOV を評価しないので、ONにしても
         # プレビューは出ない。触れるままにすると誤解を招くため無効化する
         row = col.row(align=True)
         row.enabled = compat.HAS_AOV_IN_VIEWPORT_COMPOSITOR
-        row.prop(scene, "fp_enable_compositor_view",
+        row.prop(scene, "fpm_enable_compositor_view",
                  text=t("Enable Compositor Preview"))
         if not compat.HAS_AOV_IN_VIEWPORT_COMPOSITOR:
             col.label(text=t("Live preview needs Blender 4.3+"), icon="INFO")
-        col.prop(scene, "fp_white_preview",
+        col.prop(scene, "fpm_white_preview",
                  text=t("White material preview"), icon="MATERIAL",
                  toggle=True)
-        col.prop(scene, "fp_include_antialiasing",
+        col.prop(scene, "fpm_include_antialiasing",
                  text=t("Include Anti-Aliasing Node"))
-        col.prop(scene, "fp_supersample",
+        col.prop(scene, "fpm_supersample",
                  text=t("2x supersampling (thin lines)"))
-        col.prop(scene, "fp_line_sensitivity", text=t("Line sensitivity"))
+        col.prop(scene, "fpm_line_sensitivity", text=t("Line sensitivity"))
 
         # 遠景で線が黒ベタにつぶれるのを軽減する(0 で無効=画は変わらない)
         box = layout.box()
         box.label(text=t("Far crush relief:"), icon="MOD_SMOOTH")
         col = box.column(align=True)
-        col.prop(scene, "fp_far_relief", text=t("Amount"), slider=True)
+        col.prop(scene, "fpm_far_relief", text=t("Amount"), slider=True)
         sub = col.column(align=True)
-        sub.enabled = scene.fp_far_relief > 0.0
-        sub.prop(scene, "fp_far_relief_radius", text=t("Radius (px)"))
-        sub.prop(scene, "fp_far_relief_threshold", text=t("Threshold"),
+        sub.enabled = scene.fpm_far_relief > 0.0
+        sub.prop(scene, "fpm_far_relief_radius", text=t("Radius (px)"))
+        sub.prop(scene, "fpm_far_relief_threshold", text=t("Threshold"),
                  slider=True)
 
         # チャンネル別の線の強さ(生成済みノードへ即時反映)
         box = layout.box()
         box.label(text=t("Line strength per channel:"), icon="MOD_LINEART")
         col = box.column(align=True)
-        col.prop(scene, "fp_ch_depth", text=t("Depth"), slider=True)
-        col.prop(scene, "fp_ch_mecha", text=t("Mecha"), slider=True)
-        col.prop(scene, "fp_ch_bone", text=t("Bone"), slider=True)
-        col.prop(scene, "fp_ch_mat", text=t("Material"), slider=True)
-        col.prop(scene, "fp_ch_gen", text=t("Generate"), slider=True)
+        col.prop(scene, "fpm_ch_depth", text=t("Depth"), slider=True)
+        col.prop(scene, "fpm_ch_mecha", text=t("Mecha"), slider=True)
+        col.prop(scene, "fpm_ch_bone", text=t("Bone"), slider=True)
+        col.prop(scene, "fpm_ch_mat", text=t("Material"), slider=True)
+        col.prop(scene, "fpm_ch_gen", text=t("Generate"), slider=True)
 
         box = layout.box()
         box.label(text=t("File Output"), icon="FILE_FOLDER")
         col = box.column(align=True)
-        col.prop(scene, "fp_file_output", text=t("Enable File Output"))
+        col.prop(scene, "fpm_file_output", text=t("Enable File Output"))
 
         sub = col.column(align=True)
-        sub.enabled = scene.fp_file_output
-        sub.prop(scene, "fp_file_output_path", text=t("Output path"))
+        sub.enabled = scene.fpm_file_output
+        sub.prop(scene, "fpm_file_output_path", text=t("Output path"))
         # 書き出すパスを個別に選ぶ。チェック名がそのままファイル名になる
         sub.label(text=t("Passes to write:"))
         grid = sub.grid_flow(columns=2, align=True)
-        grid.prop(scene, "fp_fo_line", text="line")
-        grid.prop(scene, "fp_fo_color", text="color")
-        grid.prop(scene, "fp_fo_light", text=t("light (diffuse)"))
-        grid.prop(scene, "fp_fo_shadow", text=t("shadow"))
-        if scene.fp_file_output and not any(
+        grid.prop(scene, "fpm_fo_line", text="line")
+        grid.prop(scene, "fpm_fo_color", text="color")
+        grid.prop(scene, "fpm_fo_light", text=t("light (diffuse)"))
+        grid.prop(scene, "fpm_fo_shadow", text=t("shadow"))
+        if scene.fpm_file_output and not any(
             getattr(scene, name)
-            for name in ("fp_fo_line", "fp_fo_color",
-                         "fp_fo_light", "fp_fo_shadow")
+            for name in ("fpm_fo_line", "fpm_fo_color",
+                         "fpm_fo_light", "fpm_fo_shadow")
         ):
             col.label(text=t("No pass selected"), icon="ERROR")
 
@@ -376,7 +376,7 @@ class FP_PT_Step3(_FPSub, bpy.types.Panel):
 
 class FP_PT_Cameras(_FPSub, bpy.types.Panel):
     bl_label = "STEP5: Camera Batch Render"
-    bl_idname = "FREEPENCIL_PT_CAMERAS"
+    bl_idname = "FPM_PT_CAMERAS"
     bl_order = 5
 
     def draw(self, context):
@@ -392,7 +392,7 @@ class FP_PT_Cameras(_FPSub, bpy.types.Panel):
         col = layout.column(align=True)
         for cam in cams:
             row = col.row(align=True)
-            row.prop(cam, "fp_cam_render", text="")
+            row.prop(cam, "fpm_cam_render", text="")
             icon = ("OUTLINER_OB_CAMERA" if cam == scene.camera
                     else "CAMERA_DATA")
             row.label(text=cam.name, icon=icon)
@@ -402,7 +402,7 @@ class FP_PT_Cameras(_FPSub, bpy.types.Panel):
 
 class FP_PT_Step4(_FPSub, bpy.types.Panel):
     bl_label = "STEP4: Manual Vertex Color"
-    bl_idname = "FREEPENCIL_PT_STEP4"
+    bl_idname = "FPM_PT_STEP4"
     bl_order = 4
 
     def draw(self, context):
@@ -410,32 +410,32 @@ class FP_PT_Step4(_FPSub, bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
-        layout.prop(scene, "fp_color_type", text=t("Vertex Color Type"))
+        layout.prop(scene, "fpm_color_type", text=t("Vertex Color Type"))
         layout.operator(LINK_MAKE_FP_OT_VCOLOR.bl_idname,
                         text=t("Paint Vertex Color"), icon="VPAINT_HLT")
 
         box = layout.box()
         box.label(text=t("Vertex-color options:"), icon="COLOR")
         col = box.column(align=True)
-        col.prop(scene, "fp_color_noise_scale",
+        col.prop(scene, "fpm_color_noise_scale",
                  text=t("Color noise scale"), slider=True)
-        col.prop(scene, "fp_min_neighbor_color_distance",
+        col.prop(scene, "fpm_min_neighbor_color_distance",
                  text=t("Min color distance"))
-        col.prop(scene, "fp_max_color_retries", text=t("Max color retries"))
+        col.prop(scene, "fpm_max_color_retries", text=t("Max color retries"))
 
         row = layout.row(align=True)
-        row.prop(scene, "fp_half_color", text="")
+        row.prop(scene, "fpm_half_color", text="")
         row.operator(LINK_MAKE_FP_OT_HALF_FILL.bl_idname,
                      text=t("Half Fill"), icon="BRUSH_DATA")
 
 
-class FP_PT_CompositorOptions(bpy.types.Panel):
+class FPM_PT_CompositorOptions(bpy.types.Panel):
     """Panel for FreePencil options in the Compositor node editor."""
 
     bl_label = "FreePencil"
     bl_space_type = "NODE_EDITOR"
     bl_region_type = "UI"
-    bl_category = "FreePencil"
+    bl_category = "FreePencil SVG"
 
     @classmethod
     def poll(cls, context):
@@ -446,6 +446,6 @@ class FP_PT_CompositorOptions(bpy.types.Panel):
         layout = self.layout
         layout.prop(
             context.scene,
-            "fp_include_antialiasing",
+            "fpm_include_antialiasing",
             text=bpy.app.translations.pgettext("Include Anti-Aliasing Node"),
         )

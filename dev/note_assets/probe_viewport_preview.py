@@ -62,8 +62,8 @@ def tick():
                 o.select_set(True)
             if meshes:
                 bpy.context.view_layer.objects.active = meshes[0]
-            bpy.context.scene.fp_enable_compositor_view = True
-            res = bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+            bpy.context.scene.fpm_enable_compositor_view = True
+            res = bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
             log(f"auto_setup: {list(res)}")
             log(f"node groups: {[g.name for g in bpy.data.node_groups]}")
             _state["phase"] = 1

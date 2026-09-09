@@ -96,7 +96,7 @@ if scene.camera is None:
         say(f"カメラが無いので自動配置 (長辺 {max(size):.1f}m, "
             f"位置 {tuple(round(v, 1) for v in eye)})")
 
-scene.fp_enable_compositor_view = False
+scene.fpm_enable_compositor_view = False
 scene.render.engine = fp_batch.eevee_engine()
 scene.eevee.taa_render_samples = 8
 scene.render.resolution_x = scene.render.resolution_y = RES
@@ -105,9 +105,9 @@ scene.render.image_settings.color_mode = "RGBA"
 
 rows = {}
 for tag, amount in (("off", 0.0), (f"relief{RELIEF}", RELIEF)):
-    scene.fp_far_relief = amount
+    scene.fpm_far_relief = amount
     t = time.time()
-    bpy.ops.freepencil2.link_button()          # STEP3 を組み直す
+    bpy.ops.fpm2.link_button()          # STEP3 を組み直す
     say(f"STEP3 (効き具合 {amount}) {time.time() - t:.1f}s")
     png = OUT / f"dept_{tag}.png"
     t = time.time()

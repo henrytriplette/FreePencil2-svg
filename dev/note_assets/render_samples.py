@@ -92,25 +92,25 @@ def stage_model(blend: Path):
 
 
 def apply_preset(scene, preset: dict, seed: int, has_armature: bool) -> None:
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = seed
-    scene.fp_sharp_auto = preset.get("sharp_auto", False)
-    scene.fp_sharp_edges = preset["sharp_edges"]
-    scene.fp_color_noise_scale = preset["color_noise_scale"]
-    scene.fp_min_neighbor_color_distance = preset["min_neighbor_color_distance"]
-    scene.fp_max_color_retries = preset["max_color_retries"]
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = seed
+    scene.fpm_sharp_auto = preset.get("sharp_auto", False)
+    scene.fpm_sharp_edges = preset["sharp_edges"]
+    scene.fpm_color_noise_scale = preset["color_noise_scale"]
+    scene.fpm_min_neighbor_color_distance = preset["min_neighbor_color_distance"]
+    scene.fpm_max_color_retries = preset["max_color_retries"]
     scene.fp_to_quads = preset.get("to_quads", False)
-    scene.fp_sharp_clear = preset.get("sharp_clear", False)
-    scene.fp_min_island_area_pct = preset.get("min_island_area_pct", 0.02)
-    scene.fp_bone_color = preset.get("bone_color", has_armature)
-    scene.fp_bone_grouping_mode = preset.get("bone_grouping", "basename")
-    scene.fp_bone_hard_names = preset.get("bone_hard_names", "")
-    scene.fp_part_tint = preset.get("part_tint", True)
-    scene.fp_seam_boundaries = preset.get("seam_boundaries", False)
-    scene.fp_line_sensitivity = preset.get("line_sensitivity", 1.0)
-    scene.fp_include_antialiasing = preset.get("antialiasing", True)
-    scene.fp_node_type = "pro"
-    scene.fp_enable_compositor_view = False
+    scene.fpm_sharp_clear = preset.get("sharp_clear", False)
+    scene.fpm_min_island_area_pct = preset.get("min_island_area_pct", 0.02)
+    scene.fpm_bone_color = preset.get("bone_color", has_armature)
+    scene.fpm_bone_grouping_mode = preset.get("bone_grouping", "basename")
+    scene.fpm_bone_hard_names = preset.get("bone_hard_names", "")
+    scene.fpm_part_tint = preset.get("part_tint", True)
+    scene.fpm_seam_boundaries = preset.get("seam_boundaries", False)
+    scene.fpm_line_sensitivity = preset.get("line_sensitivity", 1.0)
+    scene.fpm_include_antialiasing = preset.get("antialiasing", True)
+    scene.fpm_node_type = "pro"
+    scene.fpm_enable_compositor_view = False
 
 
 def main() -> None:
@@ -141,11 +141,11 @@ def main() -> None:
 
     fp_batch.select_meshes()
     t1 = time.time()
-    bpy.ops.freepencil.auto_vertex_color()
+    bpy.ops.fpm.auto_vertex_color()
     rec["step1_seconds"] = round(time.time() - t1, 2)
     objs = fp_batch.select_meshes()
-    bpy.ops.freepencil4.link_button()
-    bpy.ops.freepencil2.link_button()
+    bpy.ops.fpm4.link_button()
+    bpy.ops.fpm2.link_button()
 
     fp_batch.setup_camera_and_light()
     scene.render.engine = fp_batch.eevee_engine()

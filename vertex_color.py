@@ -205,7 +205,7 @@ class FPProgressModalMixin:
 
 class LINK_MAKE_OT_FP(FPProgressModalMixin, bpy.types.Operator):
     """Operator that separates meshes into islands and applies vertex colors."""
-    bl_idname = "freepencil.auto_vertex_color"
+    bl_idname = "fpm.auto_vertex_color"
     bl_label = "Auto Vertex Color (FreePencil)"
     bl_description = "Automatically separate and paint vertex colors on selected mesh objects"
     bl_options = {'REGISTER', 'UNDO'}
@@ -229,15 +229,15 @@ class LINK_MAKE_OT_FP(FPProgressModalMixin, bpy.types.Operator):
 
         # --- マスターシード決定（再現性のため）---
         # ランダム指定時は新しいシードを生成し、実際に使った値を
-        # fp_color_seed に書き戻して UI から確認・固定できるようにする。
-        if getattr(scene, "fp_use_random_seed", True):
+        # fpm_color_seed に書き戻して UI から確認・固定できるようにする。
+        if getattr(scene, "fpm_use_random_seed", True):
             master_operation_seed_int = random.randint(0, SEED_MAX)
             try:
-                scene.fp_color_seed = master_operation_seed_int
+                scene.fpm_color_seed = master_operation_seed_int
             except Exception:
                 pass
         else:
-            master_operation_seed_int = int(getattr(scene, "fp_color_seed", 0)) & 0xFFFFFFFF
+            master_operation_seed_int = int(getattr(scene, "fpm_color_seed", 0)) & 0xFFFFFFFF
 
         if not context.selected_objects:
             utils.show_message_box(bpy.app.translations.pgettext("Select a mesh."), icon='ERROR')
@@ -284,13 +284,13 @@ class LINK_MAKE_OT_FP(FPProgressModalMixin, bpy.types.Operator):
         yield 0.0, n_objs, bpy.app.translations.pgettext("Preparing")
 
         default_noise_scale = 1.0
-        color_noise_scale = getattr(scene, "fp_color_noise_scale", default_noise_scale)
-        min_neighbor_color_distance = getattr(scene, "fp_min_neighbor_color_distance", 0.5)
-        max_color_generation_retries = getattr(scene, "fp_max_color_retries", 30)
-        angle_threshold_rad = math.radians(scene.fp_sharp_edges)
-        clear_sharps_option = scene.fp_sharp_clear # UIの「シャープを削除」オプション
+        color_noise_scale = getattr(scene, "fpm_color_noise_scale", default_noise_scale)
+        min_neighbor_color_distance = getattr(scene, "fpm_min_neighbor_color_distance", 0.5)
+        max_color_generation_retries = getattr(scene, "fpm_max_color_retries", 30)
+        angle_threshold_rad = math.radians(scene.fpm_sharp_edges)
+        clear_sharps_option = scene.fpm_sharp_clear # UIの「シャープを削除」オプション
         # UVシーム/マテリアル境界を島境界として使う(アーティストの意図情報)
-        seam_boundaries_option = getattr(scene, "fp_seam_boundaries", False)
+        seam_boundaries_option = getattr(scene, "fpm_seam_boundaries", False)
 
         # パーツ(オブジェクト)ごとの mecha トーン分け。
         # 髪と顔のような接する別オブジェクトは、メッシュ辺を共有しないため
@@ -301,7 +301,7 @@ class LINK_MAKE_OT_FP(FPProgressModalMixin, bpy.types.Operator):
         # 近接オブジェクト同士が異なる明度クラスになるよう近接グラフを
         # 彩色し、mecha パレット全体をパーツごとに持ち上げる。
         part_tint = {}
-        if (getattr(scene, "fp_part_tint", True)
+        if (getattr(scene, "fpm_part_tint", True)
                 and len(selected_mesh_objects) > 1):
             from mathutils import Vector as _V
             bounds = []
@@ -335,7 +335,7 @@ class LINK_MAKE_OT_FP(FPProgressModalMixin, bpy.types.Operator):
         # パーツの多い組立モデル(骨格標本など)はシルエット/深度線が
         # 十分あるので、滑面への人工分割線を出さない
         many_loose_parts = False
-        if getattr(scene, "fp_sharp_auto", False):
+        if getattr(scene, "fpm_sharp_auto", False):
             # 高密度メッシュだと単体で数秒かかる(C62で3.8秒)
             yield 0.0, n_objs, bpy.app.translations.pgettext("Analyzing parts")
             # 見たいのは「8個以上あるか」だけ。
@@ -415,7 +415,7 @@ class LINK_MAKE_OT_FP(FPProgressModalMixin, bpy.types.Operator):
                 # --- 0. 自動しきい値: 二面角の分布からモデル系統を判定 ---
                 effective_threshold_rad = angle_threshold_rad
                 auto_merge_pct = None
-                if getattr(scene, "fp_sharp_auto", False):
+                if getattr(scene, "fpm_sharp_auto", False):
                     angle_samples = topo.angle_samples_deg()
                     # リグ付きモデルは bone_color が線の主役なので保守的に
                     has_arm = any(m.type == 'ARMATURE' and m.object
@@ -452,7 +452,7 @@ class LINK_MAKE_OT_FP(FPProgressModalMixin, bpy.types.Operator):
                 # --- 2.5 微小島のマージ ---
                 # 面積がメッシュ全体の一定割合未満の島は線として視認できず、
                 # 色制約違反・線の断片化・処理時間を悪化させるだけなので併合する
-                min_island_area_pct = getattr(scene, "fp_min_island_area_pct", 0.0)
+                min_island_area_pct = getattr(scene, "fpm_min_island_area_pct", 0.0)
                 if auto_merge_pct is not None:
                     # 散乱ジオメトリ判定時は強めのマージを適用
                     min_island_area_pct = max(min_island_area_pct, auto_merge_pct)
@@ -551,7 +551,7 @@ class LINK_MAKE_OT_FP(FPProgressModalMixin, bpy.types.Operator):
             verts = obj.data.vertices
             if armature_mod:
                 arm_obj = armature_mod.object
-                mode = getattr(context.scene, "fp_bone_grouping_mode", "basename")
+                mode = getattr(context.scene, "fpm_bone_grouping_mode", "basename")
                 group_colors = {}
 
                 def normalize_name(name: str) -> str:
@@ -598,7 +598,7 @@ class LINK_MAKE_OT_FP(FPProgressModalMixin, bpy.types.Operator):
                 # 純色で塗る。支配の切り替わり(例: head/neck)がステップになり
                 # 線として検出される。既定は空(挙動不変)。
                 hard_names = {s.strip().lower() for s in
-                              getattr(scene, "fp_bone_hard_names", "").split(",")
+                              getattr(scene, "fpm_bone_hard_names", "").split(",")
                               if s.strip()}
 
                 vertex_colors = [(1.0, 1.0, 1.0)] * len(verts)
@@ -787,7 +787,7 @@ def _draw_vc_progress(op):
 
 class FREEPENCIL_OT_randomize_seed(bpy.types.Operator):
     """Assign a new random color seed."""
-    bl_idname = "freepencil.randomize_seed"
+    bl_idname = "fpm.randomize_seed"
     bl_label = "Randomize Seed"
     bl_description = "Assign a new random color seed"
     bl_options = {'REGISTER', 'UNDO'}
@@ -797,7 +797,7 @@ class FREEPENCIL_OT_randomize_seed(bpy.types.Operator):
         return bpy.app.translations.pgettext("Assign a new random color seed")
 
     def execute(self, context):
-        context.scene.fp_color_seed = random.randint(0, SEED_MAX)
+        context.scene.fpm_color_seed = random.randint(0, SEED_MAX)
         return {'FINISHED'}
 
 

@@ -8,7 +8,7 @@ from . import utils
 
 class LINK_MAKE_FP_OT_HALF_FILL(bpy.types.Operator):
     """Paint selected vertices on one side of a boundary."""
-    bl_idname = "freepencil5.link_button"
+    bl_idname = "fpm5.link_button"
     bl_label = "Half Fill"
     bl_description = "Fill half by selected verts"
     bl_options = {'REGISTER', 'UNDO'}
@@ -49,7 +49,7 @@ class LINK_MAKE_FP_OT_HALF_FILL(bpy.types.Operator):
 
         col_layer = bm.loops.layers.color.get("mecha_color")
 
-        col = context.scene.fp_half_color
+        col = context.scene.fpm_half_color
 
         for face in bm.faces:
             fc = face.calc_center_median()

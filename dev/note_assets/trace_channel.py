@@ -26,9 +26,9 @@ bpy.ops.wm.read_homefile(use_empty=True)
 fp_batch.install_addon()
 bpy.ops.mesh.primitive_cube_add()
 bpy.context.active_object.select_set(True)
-bpy.context.scene.fp_node_type = "pro"
-bpy.context.scene.fp_enable_compositor_view = False
-bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+bpy.context.scene.fpm_node_type = "pro"
+bpy.context.scene.fpm_enable_compositor_view = False
+bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
 ng = next(g for g in bpy.data.node_groups if g.name.endswith("_pro"))
 

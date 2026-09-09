@@ -7,7 +7,7 @@ from . import fp_core
 
 class LINK_MAKE_FP_OT_AOV_NODE(bpy.types.Operator):
     """Create AOV node groups in the current material."""
-    bl_idname = "freepencil4.link_button"
+    bl_idname = "fpm4.link_button"
     bl_label = "freepencil4"
     bl_description = "Generate Sample Node"
     bl_options = {'REGISTER', 'UNDO'}

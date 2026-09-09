@@ -26,6 +26,17 @@ color separation to building the compositor nodes. Anywhere you don't like the
 automatic result, you can touch it up with vertex painting in STEP4 (redraw the
 color separation / add lines / remove lines).
 
+## Running alongside the original
+
+This can be installed **and enabled at the same time** as the original
+FreePencil2. The extension id (`freepencil2_svg_mod`), operator ids
+(`fpm*.`), panel ids (`FPM_PT_*`) and scene properties (`fpm_*`) are all
+separate. Its sidebar tab is **FreePencil SVG**.
+
+The trade-off is that **settings do not carry over** from the original,
+since the property names differ. Node group names and vertex colour layer
+names are unchanged, so both add-ons read the same painted meshes.
+
 ## SVG export (pen plotter)
 
 Export from **SVG Export (pen plotter)**, the first section of the sidebar.
@@ -59,7 +70,7 @@ Each source can be switched on or off independently.
 683,165 edges (37%) on the measured model. Switching them off cuts the count.
 
 **Bone boundaries** are the one source whose default differs from the raster
-path (`fp_ch_bone` defaults to 1.0). On a plotter they add too many lines, so
+path (`fpm_ch_bone` defaults to 1.0). On a plotter they add too many lines, so
 turn them on only if you want them.
 
 ### Layers (assigning pens)

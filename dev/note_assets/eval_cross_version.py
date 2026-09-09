@@ -66,10 +66,10 @@ if STAGE == "make":
     o.select_set(True)
     bpy.context.view_layer.objects.active = o
     scene = bpy.context.scene
-    scene.fp_use_random_seed = False
-    scene.fp_color_seed = 42
-    scene.fp_enable_compositor_view = False
-    bpy.ops.freepencil.auto_setup("EXEC_DEFAULT")
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 42
+    scene.fpm_enable_compositor_view = False
+    bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
     fp_batch.setup_camera_and_light()
     ink = render(f"made_on_{ver}")
     bpy.ops.wm.save_as_mainfile(filepath=str(BLEND))
@@ -82,8 +82,8 @@ else:
               for g in bpy.data.node_groups if "FreePencil" in g.name}
     as_is = render(f"opened_on_{ver}")
     # STEP3 を押し直したら直るか
-    bpy.context.scene.fp_enable_compositor_view = False
-    bpy.ops.freepencil2.link_button()
+    bpy.context.scene.fpm_enable_compositor_view = False
+    bpy.ops.fpm2.link_button()
     after = render(f"after_step3_on_{ver}")
     print(json.dumps({"stage": "check", "blender": ver,
                       "ink_as_is": as_is, "ink_after_step3": after,

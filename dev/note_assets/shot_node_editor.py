@@ -33,10 +33,10 @@ if "--prepare" in ARGV:
         bpy.data.objects.remove(o, do_unlink=True)
     bpy.ops.mesh.primitive_cube_add()
     bpy.context.active_object.select_set(True)
-    bpy.context.scene.fp_node_type = "pro"
-    bpy.context.scene.fp_enable_compositor_view = False
+    bpy.context.scene.fpm_node_type = "pro"
+    bpy.context.scene.fpm_enable_compositor_view = False
     print("prepare auto_setup: "
-          + str(list(bpy.ops.freepencil.auto_setup("EXEC_DEFAULT"))))
+          + str(list(bpy.ops.fpm.auto_setup("EXEC_DEFAULT"))))
     bpy.ops.wm.save_as_mainfile(filepath=str(save))
     print(f"[prepare] saved {save}")
     sys.exit(0)

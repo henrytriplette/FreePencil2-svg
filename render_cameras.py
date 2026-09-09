@@ -1,6 +1,6 @@
 """Batch-render checked cameras through the compositor File Output nodes.
 
-各カメラの fp_cam_render チェックを見て、チェック済みカメラを順に
+各カメラの fpm_cam_render チェックを見て、チェック済みカメラを順に
 レンダリングする。File Output ノードの保存先をカメラごとの
 //camera_renders/NN_カメラ名/ に振り替え、コンポジット出力だけを書き出す
 (通常のレンダー画像は保存しない)。実行後は元の設定に戻す。
@@ -21,7 +21,7 @@ def _safe_name(name: str) -> str:
 
 class FP_OT_RENDER_CAMERAS(bpy.types.Operator):
     """Render every checked camera via the compositor File Output nodes."""
-    bl_idname = "freepencil.render_cameras"
+    bl_idname = "fpm.render_cameras"
     bl_label = "Render checked cameras"
     bl_description = (
         "Render each checked camera; File Output nodes write into "
@@ -52,7 +52,7 @@ class FP_OT_RENDER_CAMERAS(bpy.types.Operator):
 
         cameras = sorted(
             (o for o in scene.objects
-             if o.type == "CAMERA" and getattr(o, "fp_cam_render", True)),
+             if o.type == "CAMERA" and getattr(o, "fpm_cam_render", True)),
             key=lambda o: o.name.lower())
         if not cameras:
             self.report({'ERROR'}, "No cameras checked")
