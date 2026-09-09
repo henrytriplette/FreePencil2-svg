@@ -26,7 +26,7 @@ config.json
 mcp-info.json
 claude_desktop_config.json
 debug_install.bat
-dist/
+dist/*
 old_ver/
 
 # 使い方マニュアルは有料note/配布ZIPでのみ提供する

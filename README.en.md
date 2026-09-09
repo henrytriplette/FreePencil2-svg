@@ -213,7 +213,7 @@ The distribution zip can be built with Blender's CLI.
 blender --command extension build --source-dir . --output-dir dist
 ```
 
-Install the generated `dist/freepencil2-*.zip` via
+Install the generated `dist/freepencil2_svg_mod-*.zip` via
 **Edit → Preferences → Add-ons → ▼ → Install from Disk**.
 
 ## About this repository and note

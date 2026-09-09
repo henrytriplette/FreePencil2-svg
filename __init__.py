@@ -1,5 +1,5 @@
 bl_info = {
-    "name": "FreePencil",
+    "name": "FreePencil2 - SVG Mod",
     "author": "Masamune Sakaki",
     "version": (2, 8, 0),
     # インストール可能な下限。blender_manifest.toml の blender_version_min と
@@ -8,7 +8,7 @@ bl_info = {
     # プレビューの下限は compat.HAS_AOV_IN_VIEWPORT_COMPOSITOR(4.3)。
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > FreePencil",
-    "description": "FreePencil: Vertex Colors and Node Generation Tools",
+    "description": "Line art from 3D models as plotter-ready SVG vectors",
     "warning": "",
     "category": "Object",
 }

@@ -32,7 +32,7 @@ MIN_VERSION = (4, 2)
 
 INSTALL_SNIPPET = '''
 import bpy, sys, json
-MODULE = "bl_ext.user_default.freepencil2"
+MODULE = "bl_ext.user_default.freepencil2_svg_mod"
 rec = {"blender": bpy.app.version_string, "ok": False}
 try:
     try:
@@ -75,7 +75,7 @@ print("[install] " + json.dumps(rec, ensure_ascii=False))
 
 VERIFY_SNIPPET = '''
 import bpy, sys, json
-MODULE = "bl_ext.user_default.freepencil2"
+MODULE = "bl_ext.user_default.freepencil2_svg_mod"
 rec = {"blender": bpy.app.version_string, "ok": False}
 try:
     mod = sys.modules.get(MODULE)

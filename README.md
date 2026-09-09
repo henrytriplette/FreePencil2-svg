@@ -194,7 +194,7 @@ Blender 4.5、STEP0 を押してから終わるまで（2回ずつ計測）。
 blender --command extension build --source-dir . --output-dir dist
 ```
 
-生成された `dist/freepencil2-*.zip` を、Blender の
+生成された `dist/freepencil2_svg_mod-*.zip` を、Blender の
 **編集 → プリファレンス → アドオン → ▼ → ディスクからインストール**
 で導入してください。
 

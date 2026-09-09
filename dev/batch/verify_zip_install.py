@@ -17,14 +17,14 @@ import bpy
 
 ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 ZIP = Path(ARGV[ARGV.index("--zip") + 1]).resolve()
-MODULE = "bl_ext.user_default.freepencil2"
+MODULE = "bl_ext.user_default.freepencil2_svg_mod"
 
 rec: dict = {"blender": bpy.app.version_string, "zip": ZIP.name,
              "zip_bytes": ZIP.stat().st_size, "ok": False}
 try:
     # 既に入っていれば消してから入れ直す(前回の残骸で通ってしまうのを防ぐ)
     try:
-        bpy.ops.extensions.package_uninstall(repo_index=0, pkg_id="freepencil2")
+        bpy.ops.extensions.package_uninstall(repo_index=0, pkg_id="freepencil2_svg_mod")
     except Exception:
         pass
 

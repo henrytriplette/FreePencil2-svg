@@ -26,7 +26,7 @@ from pathlib import Path
 
 import bpy
 
-ADDON_MODULE = "bl_ext.user_default.freepencil2"
+ADDON_MODULE = "bl_ext.user_default.freepencil2_svg_mod"
 
 ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = Path(ARGV[ARGV.index("--out") + 1]) if "--out" in ARGV else Path.cwd()
