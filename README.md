@@ -1,252 +1,287 @@
 # FreePencil2 - SVG Mod
 
-**日本語** | [English](README.en.md)
+[日本語](README.ja.md) | **English**
 
-> **[FreePencil2](https://github.com/megamarsun/FreePencil2)（榊正宗 氏）の非公式フォークです。**
-> ペンプロッタ向けの SVG 書き出しを主機能として足したもので、本家とは
-> 別の拡張として登録されるため、同じ Blender に入れて同時に有効化できます。
+> **An unofficial fork of [FreePencil2](https://github.com/megamarsun/FreePencil2) by Masamune Sakaki.**
+> It adds SVG export for pen plotters as the primary feature, and registers
+> as a separate extension, so it can be installed and enabled alongside the
+> original.
 
-3Dモデルから線画を自動生成する Blender アドオンです。線は **ベクタ（SVG）**
-としても、ラスタ（コンポジタ経由のレンダー画像）としても出せます。
+A Blender add-on that automatically generates line art from 3D models. Lines
+come out as **vectors (SVG)** or as raster (a rendered image via the compositor).
 
-**主な用途はペンプロッタ向けの SVG 書き出しです。**
+**Its main use is SVG export for pen plotters.**
 
-モデルを頂点カラーで自動的に塗り分け、その色境界を線として取り出します
-（いわゆる塗り分け法）。原理が単純なぶん高速で、128万ポリゴンのモデルでも
-30秒弱で処理できます。
+It automatically paints the model with vertex colors and extracts the color
+boundaries as lines (the so-called "color-separation" method). Because the
+principle is simple, it is fast: even a 1.28-million-polygon model is processed
+in just under 30 seconds.
 
-塗り分け法の難しさは「どう塗り分けるか」という前処理にありました。
-FreePencil2 はそこを自動化しています。
+The hard part of the color-separation method has always been the preprocessing —
+*how* to separate the colors. FreePencil2 automates exactly that.
 
-- 二面角の分布から分割角度を自動判定
-- 隣接グラフを彩色し、隣り合う領域が必ず別の色クラスになるようにする
-- 微小領域の自動マージ
-- 接するパーツ同士のトーン分け
-- リグ検出によるボーン単位の塗り分け
+- Automatically determines the split angle from the distribution of dihedral angles
+- Colors the adjacency graph so that neighboring regions always land in different color classes
+- Automatically merges tiny regions
+- Assigns distinct tones to parts that touch each other
+- Per-bone color separation via rig detection
 
-STEP0 の「全自動セットアップ」を1回押すだけで、塗り分けからコンポジタの
-ノード構築まで完了します。自動の結果が気に入らない箇所は、STEP4 の頂点
-ペイントで手直しできます（塗り分けの描き替え／線を足す／線を消す）。
+A single press of "Fully automatic setup" in STEP0 completes everything from the
+color separation to building the compositor nodes. Anywhere you don't like the
+automatic result, you can touch it up with vertex painting in STEP4 (redraw the
+color separation / add lines / remove lines).
 
-## 本家との併存について
+## Running alongside the original
 
-本家 FreePencil2 と同じ Blender に入れて、**同時に有効化できます**。
-拡張 id (`freepencil2_svg_mod`)、オペレータ id (`fpm*.`)、パネル id
-(`FPM_PT_*`)、シーンプロパティ (`fpm_*`) をすべて分けてあります。
-サイドバーのタブは **FreePencil SVG** です。
+Both add-ons can be **installed and enabled at the same time**. The
+extension id (`freepencil2_svg_mod`), operator ids (`fpm*.`), panel ids
+(`FPM_PT_*`) and scene properties (`fpm_*`) are all separate, so neither
+shadows the other. This add-on's sidebar tab is **FreePencil SVG**.
 
-そのぶん、**本家の設定は引き継がれません**（プロパティ名が違うため）。
-ノードグループ名と頂点カラー層の名前は変えていないので、塗り分け済みの
-メッシュはどちらからでも読めます。
+Verified by installing both and enabling them together: 60 registered
+types (30 each) and 160 scene properties (80 each), with both sets live.
 
-## SVG 書き出し（ペンプロッタ）
+**Use only one of them per scene for STEP2/STEP3.** What is separate is the
+*registration*, not the data they write:
 
-サイドバー先頭の **SVG Export (pen plotter)** から書き出します。塗り分けを
-済ませたあと（STEP0 か STEP1）に押してください。
+- STEP3 builds the **scene's** compositor tree. Two add-ons both building it
+  in one scene overwrite each other, whatever their ids are.
+- STEP2 injects the AOV node group into **every material**. The node group
+  names (`FreePencil_v1_1_0_*`, `FreePencil_aov_Group_v1_1_0`) are
+  deliberately left shared: giving this fork its own would inject a second
+  AOV group into every material and write the AOVs twice.
 
-レンダー画像はトレースしません。線の定義そのもの――隣り合う面の色が違う辺
-――からベクタを作ります。コンポジタの Sobel は幅を持つ帯を描くので、それを
-追跡するとプロッタが輪郭を二重になぞってしまいます。辺そのものを出せば
-常に1本の中心線になります。
+So: enable both, switch between their panels freely, and paint or export
+from either — but run the compositor setup from one add-on at a time.
+Settings do not carry over either, since the property names differ; the
+vertex colour layers (`mecha_color` and friends) are shared, so both read
+the same painted meshes.
 
-- 隠線処理は Z パスとの照合。手前にあるものだけを残します
-- 端点の結合と描画順の並べ替えまで済ませて書き出します
-- mm 単位・塗りなし・一定線幅（線幅＝ペン幅）
-- STEP4 の塗りを反映します。`mask_color` で消した線、`line_color` を白に
-  した線は SVG にも出ません
+## SVG export (pen plotter)
 
-### 線の出どころ
+Export from **SVG Export (pen plotter)**, the first section of the sidebar.
+Run it after the color separation is done (STEP0 or STEP1).
 
-どれを線にするかは個別に切り替えられます。
+It does not trace the rendered image. The vectors come from the definition of
+a line itself — an edge whose two adjacent faces differ in color. The
+compositor's Sobel draws a band with width, so tracing it makes a plotter go
+around each line twice as an outline. Emitting the edge itself always gives a
+single centreline.
 
-| 出どころ | 既定 | 内容 |
+- Hidden-line removal compares against the Z pass; only what is in front survives
+- Line ends are joined and the draw order is optimised before writing
+- Millimetres, no fill, constant stroke width (stroke width = pen width)
+- STEP4 paint is honoured: lines erased with `mask_color`, or made invisible
+  with `line_color`, do not reach the SVG either
+
+### Line sources
+
+Each source can be switched on or off independently.
+
+| source | default | what it is |
 |---|---|---|
-| 塗り分け | ON | 隣り合う面の `mecha_color` が違う辺 |
-| マテリアル境界 | ON | マテリアルが変わる辺 |
-| ボーン境界 | **OFF** | `bone_color` が違う辺。線が増えるので任意 |
-| 開いた辺 | ON | 面が2枚ない辺 |
-| 外形線 | ON | カメラから見て表裏が入れ替わる辺 |
+| Color separation | ON | edges where the adjacent faces' `mecha_color` differs |
+| Material boundaries | ON | edges where the material changes |
+| Bone boundaries | **OFF** | edges where `bone_color` differs; adds many lines |
+| Open edges | ON | edges without exactly two faces |
+| Silhouette | ON | edges where the surface turns away from the camera |
 
-**開いた辺** は、閉じていない CAD をインポートすると大量に出ます（実測の
-CADモデルでは 683165本中 255985本、37%）。切ると本数が減ります。
+**Open edges** are abundant in imported CAD with unwelded shells: 255,985 of
+683,165 edges (37%) on the measured model. Switching them off cuts the count.
 
-**ボーン境界** だけラスタ経路（`fpm_ch_bone` は既定 1.0）と既定値が違います。
-プロッタでは線が増えすぎるため、要る場合だけ入れてください。
+**Bone boundaries** are the one source whose default differs from the raster
+path (`fpm_ch_bone` defaults to 1.0). On a plotter they add too many lines, so
+turn them on only if you want them.
 
-### レイヤー分け（ペンの割り当て）
+### Layers (assigning pens)
 
-出力を SVG レイヤーに分けられます（`単層` / `出どころ別` / `オブジェクト別`）。
-vpype と Inkscape がレイヤーとして読むので、ペンを分けられます。
+The output can be split into SVG layers (`Single layer` / `By line source` /
+`By object`). vpype and Inkscape read these, so you can assign a different pen
+to each.
 
-**レイヤーごとに別ファイル**にも書けます（`<名前>_<層>.svg`）。紙への
-変換は全層ぶんから作って共有するので、別々に読み込んでも位置が合います。
+Layers can also be written as **separate files** (`<name>_<layer>.svg`). The
+page transform is computed once across all layers and shared, so the files
+line up when loaded separately.
 
-鎖と描画順はレイヤーの中で閉じるため、分けると本数とペン移動は増えます
-（実測: 3286本・2997mm → 出どころ別 5210本・6434mm、オブジェクト別
-5627本・7583mm）。ペンを分ける必要がなければ `単層` のままが最短です。
+Chaining and draw-order sorting stay inside a layer, so splitting increases
+both the path count and the pen travel (measured: 3286 paths / 2997 mm ->
+5210 / 6434 by source, 5627 / 7583 by object). If you do not need separate
+pens, a single layer plots fastest.
 
-外周だけを太いペンで描きたい場合は **外周レイヤー**（既定 ON）を使います。
-深度バッファで辺の左右を覗き、片側が背景か、手前より大きく奥へ落ちている
-辺だけを `outline` 層へ分けます。
+To draw the outline in a heavier pen, use the **outline layer** (on by
+default). It looks to either side of each edge in the depth buffer and keeps
+only those where one side is background, or drops away sharply behind the
+edge, putting them in an `outline` layer.
 
-**外形線レイヤーは「絵の外周」ではありません。** 隣り合う面の表裏が
-入れ替わる辺すべてなので、薄板の多い CAD では内側にも大量に出ます。
-外周が要るときは外形線ではなく外周レイヤーを使ってください。
+**The silhouette layer is not the outer contour.** It holds every edge where
+adjacent faces flip between front- and back-facing, which on thin-plate CAD
+occurs throughout the interior too. Use the outline layer instead.
 
-**外周の深度段差**（既定 0.02）で拾う細かさが変わります。上げるほど
-大きな段差だけになります（実測: 0.005 で 1512本、0.02 で 1083本、
-0.10 で 410本＝ほぼ機体の外形と足まわりだけ）。
+**Outline depth step** (default 0.02) controls how fine a step counts.
+Raising it keeps only the larger steps: measured 1512 paths at 0.005, 1083 at
+0.02, and 410 at 0.10 - by then essentially the machine's outer contour and
+its feet.
 
-### 書き出す前に見る
+### Seeing it before you export
 
-**プレビューを更新** を押すと、書き出される線をそのまま3Dビューに引きます。
-SVG を開き直さずに、線の量や消え方を確かめられます。
+**Refresh preview** draws the lines that would be exported straight into the
+3D view, so you can judge line density and what got culled without opening
+the SVG somewhere else.
 
-隠線処理はレンダーカメラから見て計算するので、**正しく見えるのはカメラ
-ビューのときだけ**です（視点を回すと隠れ方は合わなくなります。線の位置は
-合っています）。自動では追随しないので、設定を変えたら押し直してください。
+Hidden-line removal is computed for the render camera, so **it is only
+truthful from camera view** - orbit away and the occlusion no longer matches
+(the line positions still do). It does not follow changes on its own; press
+it again after changing a setting.
 
-### 紙への合わせ方
+### Fitting to the page
 
-| 合わせ方 | 内容 |
+| fit | what it does |
 |---|---|
-| カメラフレーム | 構図をそのまま出す。被写体が小さく写っていれば紙の上でも小さい |
-| 描いた範囲 | 実際に描かれた範囲を紙いっぱいに。余白が一定になる |
+| Camera frame | keeps the composition; a small subject stays small on paper |
+| Drawing bounds | fits what was actually drawn to the page, so the margin is constant |
 
-既定は「描いた範囲」です。 余白が読めるだけでなく、結合の許容量(mm)が
-絵に対して素直に効くからです。絵が紙の中で小さいと、無関係な端点まで
-許容内に入って本数だけが減ります（実測: カメラ合わせで 162×125mm・3286本、
-描いた範囲で 246×190mm・3802本。後者のほうが結合が正直に効いている）。
-構図をそのまま紙に出したい場合だけ「カメラフレーム」にしてください。
+Drawing bounds is the default. Beyond a predictable margin, it makes
+the merge tolerance (in mm) behave honestly against the drawing. When the
+drawing is small on the page, unrelated ends fall inside the tolerance and
+only the path count goes down. Measured: 162x125 mm and 3286 paths by camera
+frame, 246x190 mm and 3802 paths by drawing bounds - the latter is the count
+you actually get at that pen size. Choose the camera frame only when you want
+the composition reproduced on the paper as-is.
 
-### プリセットとカメラ一括
+### Presets and camera batch
 
-パネル先頭の **プリセット** に、よく使う組み合わせを入れてあります
-（`Fine pen` / `Bold outline, 2 pens` / `Quick draft`）。
+**Preset** at the top of the panel holds the usual combinations (`Fine pen`,
+`Bold outline, 2 pens`, `Quick draft`).
 
-**チェックしたカメラを書き出す** で、STEP5 と同じカメラのチェックを使って
-`//svg_exports/NN_<カメラ名>.svg` に一括出力します（.blend の保存が必要）。
-1台が失敗しても残りは書き出し、どれが駄目だったかを報告します。
+**Export checked cameras** writes `//svg_exports/NN_<camera>.svg` for every
+camera ticked in STEP5 (the .blend must be saved). If one camera fails the
+rest are still written, and the failure is reported.
 
-設定は3段に分かれています。毎回触るものが親パネル、線の出どころと詰めの
-設定はそれぞれ子パネルです。
+The settings are split across three panels: what you touch every time is in
+the parent, with line sources and the finer settings in their own sub-panels.
 
-### プロット時間の見積り
+### Plot time estimate
 
-書き出すとパネルに出ます。描く距離・移動距離・所要時間の目安で、
-ペン速度・移動速度・ペンの上げ下ろしにかかる秒数から計算します
-（実測の CAD モデルで 12.8〜17.1 分）。加減速は見ていないので目安です。
+Shown in the panel after an export: drawn length, travel length and an
+estimated time, from the pen-down speed, travel speed and the seconds each
+pen lift costs (12.8 to 17.1 minutes for the measured CAD model). It does not
+model acceleration, so treat it as a guide.
 
-実測（1047642面のCADモデル、A4横、1600px）:
+Measured (a 1,047,642-face CAD model, A4 landscape, 1600 px):
 
-| 段階 | 本数 | ペン移動 |
+| stage | paths | pen-up travel |
 |---|---|---|
-| 分岐で切った鎖 | 26927 | 183948 mm |
-| 端点の結合（既定 0.1mm） | 3286 | — |
-| 描画順の並べ替え | 3286 | 2997 mm |
+| chains split at junctions | 26927 | 183948 mm |
+| line ends joined (0.1 mm default) | 3286 | — |
+| draw order sorted | 3286 | 2997 mm |
 
-書き出し全体で約5秒（塗り分けを除く）。
+About 5 seconds for the whole export (excluding the color separation).
 
-**結合の許容量は、絵の大きさではなくペン幅で決めてください。** 紙に対して
-絵が小さいと、無関係な端点まで許容内に入って本数だけが減ります。
+**Set the merge tolerance from the pen width, not from how small the drawing
+is.** If the drawing is small on the page, unrelated ends fall inside the
+tolerance and only the path count goes down.
 
-`reloop` や `layout`、HPGL 出力が要る場合は vpype を通してください。
-vpype 本体は同梱していません（Shapely と scipy を要求するため、4.2〜5.2 を
-1パッケージで配る方針と両立しません）。
+For `reloop`, `layout` or HPGL output, run the result through vpype. vpype is
+not bundled: it requires Shapely and scipy, which cannot be reconciled with
+shipping one package for 4.2 through 5.2.
 
 ```bash
 vpype read out.svg reloop linesort write plot.svg
 ```
 
-### 処理時間の実測
+### Measured processing times
 
-Blender 4.5、STEP0 を押してから終わるまで（2回ずつ計測）。
+Blender 4.5, from pressing STEP0 until completion (each measured twice).
 
-| モデル | 規模 | 時間 |
+| Model | Scale | Time |
 |---|---|---|
-| メカ | 155メッシュ / 5万ポリゴン | 約 8.7 秒 |
-| 戦車 | 43メッシュ / 42万ポリゴン | 約 19.4 秒 |
-| 蒸気機関車 | 単一メッシュ / 128万ポリゴン | 約 28 秒 |
+| Mecha | 155 meshes / 50k polygons | approx. 8.7 s |
+| Tank | 43 meshes / 420k polygons | approx. 19.4 s |
+| Steam locomotive | single mesh / 1.28M polygons | approx. 28 s |
 
-### 既知の制限
+### Known limitations
 
-- 透過マテリアル（BLEND）は AOV が書かれないため HASHED へ変換されます
-  （透過・屈折を持つ本物のガラスは対象外。STEP0 のチェックで無効化可）。
-  形状・頂点数・シャープ・シームは変更しません
-- パーツ・トーン分けと明度上限の兼ね合いで、パーツ数の多いモデルでは
-  一部パーツの隣接輝度差が半減し、線が薄くなることがあります（未解決）
-- 4.5 と 5.2 では線幅がわずかに異なります（位置は99.9%一致、5.2 の方が
-  インク量が約1.8%多い）。1つの作品では片方に統一してください
-- 5.2 で保存した .blend を 4.5 で開くとコンポジタが正しく動きません
+- Transparent materials (BLEND) are converted to HASHED because AOVs are not
+  written for them (real glass with transparency/refraction is out of scope; this
+  can be disabled with the checkbox in STEP0). Shape, vertex count, sharp edges
+  and seams are left unchanged
+- Due to the interaction between part/tone separation and the brightness ceiling,
+  models with many parts may end up with the adjacent luminance difference of some
+  parts halved, making the lines faint (unresolved)
+- Line width differs slightly between 4.5 and 5.2 (positions match 99.9%; 5.2 lays
+  down about 1.8% more ink). Stick to one of them within a single artwork
+- A .blend saved in 5.2 will not have a correctly working compositor when opened in 4.5
 
-## 対応バージョン
+## Supported versions
 
-同じパッケージで下記すべてに導入できます。回帰テストを各版で実行しています
-（現在61本。うち21本が SVG 書き出し）。SVG の書き出しは 4.5.6 と 5.2.1 で
-同一の結果になることを実測で確認しています（104万面のモデルで辺・本数・
-描画距離まで一致）。
+The same package can be installed on all of the following, and the regression
+tests are run on every version (61 of them now, 21 covering the SVG export).
+The SVG export is confirmed to produce identical results on 4.5.6 and 5.2.1 -
+edges, path count and drawn length all match on a 1M-face model.
 
-| Blender | 状態 | レンダリング | ビューポートのライブプレビュー |
+| Blender | Status | Rendering | Live viewport preview |
 |---|---|---|---|
-| 5.2 LTS | 推奨 | ✅ | ✅ |
-| 4.5 LTS | 推奨 | ✅ | ✅ |
-| 4.3 | 動作確認済 | ✅ | ✅ |
-| 4.2 LTS | **限定対応** | ✅ | ❌ |
+| 5.2 LTS | Recommended | ✅ | ✅ |
+| 4.5 LTS | Recommended | ✅ | ✅ |
+| 4.3 | Verified | ✅ | ✅ |
+| 4.2 LTS | **Limited support** | ✅ | ❌ |
 
-**4.2 の限定対応について。** F12 のレンダリングは他バージョンと同じ線画になります
-（同一シーンでの線量の差は全4版で 1.1% 以内）。ただし 4.2 のビューポート
-コンポジタは AOV 出力を評価しないため、ライブプレビューには線が出ません。
-アドオン側の回避策がないので、4.2 ではレンダー表示への切り替え自体を行わず、
-パネルにその旨を表示します。プレビュー関連の不具合は 4.2 では修正対象外です。
+**About the limited support for 4.2.** F12 rendering produces the same line art as
+the other versions (the difference in line volume for an identical scene is within
+1.1% across all four versions). However, the 4.2 viewport compositor does not
+evaluate AOV outputs, so no lines appear in the live preview. There is no
+workaround on the add-on side, so on 4.2 the add-on does not switch to rendered
+view at all and shows a note to that effect in the panel. Preview-related bugs will
+not be fixed for 4.2.
 
-4.1 以下は非対応です（`ShaderNodeOutputAOV.aov_name` が無い）。
+4.1 and earlier are not supported (`ShaderNodeOutputAOV.aov_name` does not exist).
 
-## ビルドとインストール
+## Building and installing
 
-配布用の zip は Blender の CLI で作れます。
+The distribution zip can be built with Blender's CLI.
 
 ```bash
 blender --command extension build --source-dir . --output-dir dist
 ```
 
-生成された `dist/freepencil2_svg_mod-*.zip` を、Blender の
-**編集 → プリファレンス → アドオン → ▼ → ディスクからインストール**
-で導入してください。
+Install the generated `dist/freepencil2_svg_mod-*.zip` via
+**Edit → Preferences → Add-ons → ▼ → Install from Disk**.
 
-## 本家と、このフォークについて
+## About the original and this fork
 
-このリポジトリは [megamarsun/FreePencil2](https://github.com/megamarsun/FreePencil2) の非公式フォークです。
-塗り分け法そのものと STEP0〜5 のラスタ経路は本家の成果で、このフォークが
-足しているのは SVG 書き出しの部分です。
+This repository is an unofficial fork of [megamarsun/FreePencil2](https://github.com/megamarsun/FreePencil2).
+The color-separation method itself and the STEP0-STEP5 raster pipeline are
+the original author's work; what this fork adds is the SVG export.
 
-**本家の note の記事・マニュアル・有償サポートは、このフォークを対象に
-していません。** 本家についての質問や購入は本家の窓口へ、このフォークの
-不具合や要望はこのリポジトリの Issue へお願いします。
+**The articles, manual and paid support on the original author's note do
+not cover this fork.** Please direct questions and purchases about the
+original to the original channels, and bugs or requests for this fork to
+this repository's issues.
 
-- 本家: https://github.com/megamarsun/FreePencil2
-- 本家の note（原作者による記事・マニュアル・サポート）: https://note.com/megamarsun/n/nddacd81c6eae
+- Original: https://github.com/megamarsun/FreePencil2
+- The original author's note (articles, manual, support): https://note.com/megamarsun/n/nddacd81c6eae
 
-**このリポジトリは開発リポジトリです。** すぐ使える zip は置いていません。
-上の「ビルドとインストール」の手順でご自身でビルドしてください。過去
-バージョンのソースは git のタグから取得できます。
+**This is a development repository.** No ready-to-use zip is hosted here;
+build it yourself with the steps under "Building and installing" above.
+Source for past versions is available from the git tags.
 
-変更履歴は [CHANGELOG.md](CHANGELOG.md) にあります。
+The change history is in [CHANGELOG.md](CHANGELOG.md).
 
-## リポジトリ構成
+## Repository layout
 
-- アドオン本体はリポジトリ直下
-- `external_resources/` — ノードグループの生成スクリプト（4.x 用と 5.x 用）
-- `locale/` — 翻訳ファイル
-- `dev/` — 開発用の評価パイプラインと回帰テスト（アドオンの動作には不要）
+- The add-on itself lives at the repository root
+- `external_resources/` — scripts that generate the node groups (for 4.x and 5.x)
+- `locale/` — translation files
+- `dev/` — evaluation pipeline and regression tests for development (not needed to run the add-on)
 
-## ライセンス
+## License
 
 GPL-3.0-or-later
 
-## 作者
+## Authors
 
-- 原作: 榊正宗 — https://masamunesakaki.com/
+- Original: Masamune Sakaki — https://masamunesakaki.com/
 - SVG Mod: Henry Triplette — https://github.com/henrytriplette/FreePencil2-svg
 
-GPL-3.0-or-later のもとで公開されている本家を、同ライセンスで改変した
-ものです。
+A modification, under the same licence, of the original released under
+GPL-3.0-or-later.

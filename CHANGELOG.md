@@ -1,5 +1,26 @@
 # FreePencil2 - Changelog
 
+## [2.8.2] - 2026-09-09
+### Added
+- **Japanese translations for the SVG UI.** The whole new panel was
+  untranslated: `locale/ja_JP.po` had 129 entries covering the original
+  UI and none of the ~50 SVG strings, so the add-on's primary panel
+  rendered in English inside an otherwise Japanese interface. 50 entries
+  added to `ja_JP.po`, and the same keys to `en_US.po` so the two files
+  cover the same strings.
+
+### Changed
+- **English is now the primary README** (`README.md`); the Japanese one
+  moved to `README.ja.md`.
+- **The coexistence claim is now accurate.** The README said both add-ons
+  could be enabled together and stopped there. Registration is genuinely
+  separate, but the data they write is not: STEP3 builds the *scene's*
+  compositor tree, and STEP2 injects the AOV group into every material.
+  Both READMEs now say to run STEP2/STEP3 from one add-on per scene, and
+  explain why the node group names are deliberately left shared - giving
+  this fork its own would put a second AOV group in every material and
+  write the AOVs twice.
+
 ## [2.8.1] - 2026-09-09
 ### Changed
 - **The README now reads as a fork, not as a copy of the original's.** It

@@ -515,3 +515,203 @@ msgstr "ファイル出力"
 msgctxt "*"
 msgid "Far crush relief"
 msgstr "遠景つぶれ軽減"
+
+msgctxt "*"
+msgid "SVG Export (pen plotter)"
+msgstr "SVG 書き出し（ペンプロッタ）"
+
+msgctxt "*"
+msgid "Line sources"
+msgstr "線の出どころ"
+
+msgctxt "*"
+msgid "Advanced"
+msgstr "詳細設定"
+
+msgctxt "*"
+msgid "Set an active camera first"
+msgstr "先にカメラを設定してください"
+
+msgctxt "*"
+msgid "Run STEP0 or STEP1 first"
+msgstr "先に STEP0 か STEP1 を実行してください"
+
+msgctxt "*"
+msgid "Save the .blend to batch cameras"
+msgstr "カメラ一括には .blend の保存が要ります"
+
+msgctxt "*"
+msgid "Preview"
+msgstr "プレビュー"
+
+msgctxt "*"
+msgid "Preset"
+msgstr "プリセット"
+
+msgctxt "*"
+msgid "Refresh preview"
+msgstr "プレビューを更新"
+
+msgctxt "*"
+msgid "Clear preview"
+msgstr "プレビューを消す"
+
+msgctxt "*"
+msgid "Preview in viewport"
+msgstr "ビューポートに表示"
+
+msgctxt "*"
+msgid "Export SVG"
+msgstr "SVG を書き出す"
+
+msgctxt "*"
+msgid "Export checked cameras"
+msgstr "チェックしたカメラを書き出す"
+
+msgctxt "*"
+msgid "Page"
+msgstr "用紙"
+
+msgctxt "*"
+msgid "Fit"
+msgstr "紙への合わせ方"
+
+msgctxt "*"
+msgid "Margin"
+msgstr "余白"
+
+msgctxt "*"
+msgid "Margin (mm)"
+msgstr "余白 (mm)"
+
+msgctxt "*"
+msgid "Pen width"
+msgstr "線幅"
+
+msgctxt "*"
+msgid "Pen width (mm)"
+msgstr "線幅 (mm)"
+
+msgctxt "*"
+msgid "Layers"
+msgstr "レイヤー"
+
+msgctxt "*"
+msgid "One file per layer"
+msgstr "レイヤーごとに別ファイル"
+
+msgctxt "*"
+msgid "Color separation"
+msgstr "塗り分け"
+
+msgctxt "*"
+msgid "Material boundaries"
+msgstr "マテリアル境界"
+
+msgctxt "*"
+msgid "Bone boundaries"
+msgstr "ボーン境界"
+
+msgctxt "*"
+msgid "Open edges"
+msgstr "開いた辺"
+
+msgctxt "*"
+msgid "Silhouette"
+msgstr "外形線"
+
+msgctxt "*"
+msgid "Honour STEP4 paint"
+msgstr "STEP4 の塗りを反映"
+
+msgctxt "*"
+msgid "Paths"
+msgstr "線の整理"
+
+msgctxt "*"
+msgid "Merge (mm)"
+msgstr "端点の結合 (mm)"
+
+msgctxt "*"
+msgid "Merge tolerance"
+msgstr "端点の結合許容量"
+
+msgctxt "*"
+msgid "Simplify"
+msgstr "間引き"
+
+msgctxt "*"
+msgid "Simplify (mm)"
+msgstr "間引き (mm)"
+
+msgctxt "*"
+msgid "Sort draw order"
+msgstr "描画順を並べ替え"
+
+msgctxt "*"
+msgid "Outline layer"
+msgstr "外周レイヤー"
+
+msgctxt "*"
+msgid "Outline depth step"
+msgstr "外周の深度段差"
+
+msgctxt "*"
+msgid "Hidden line removal"
+msgstr "隠線処理"
+
+msgctxt "*"
+msgid "Depth resolution"
+msgstr "深度の解像度"
+
+msgctxt "*"
+msgid "Samples per edge"
+msgstr "辺ごとのサンプル数"
+
+msgctxt "*"
+msgid "Depth bias"
+msgstr "深度バイアス"
+
+msgctxt "*"
+msgid "Neighbourhood"
+msgstr "近傍半径"
+
+msgctxt "*"
+msgid "Depth neighbourhood"
+msgstr "深度の近傍半径"
+
+msgctxt "*"
+msgid "Keep hidden lines"
+msgstr "隠れた線も残す"
+
+msgctxt "*"
+msgid "Plot estimate"
+msgstr "プロット時間の見積り"
+
+msgctxt "*"
+msgid "Pen down mm/s"
+msgstr "描画速度 (mm/s)"
+
+msgctxt "*"
+msgid "Travel mm/s"
+msgstr "移動速度 (mm/s)"
+
+msgctxt "*"
+msgid "Pen lift (s)"
+msgstr "ペンの上下 (秒)"
+
+msgctxt "*"
+msgid "Pen down speed"
+msgstr "描画速度"
+
+msgctxt "*"
+msgid "Travel speed"
+msgstr "移動速度"
+
+msgctxt "*"
+msgid "Pen lift"
+msgstr "ペンの上下"
+
+msgctxt "*"
+msgid "Last export"
+msgstr "前回の書き出し"

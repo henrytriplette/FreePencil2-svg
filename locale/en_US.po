@@ -434,3 +434,203 @@ msgstr "Auto AOVs from scene"
 msgctxt "*"
 msgid "2x supersampling (thin lines)"
 msgstr "2x supersampling (thin lines)"
+
+msgctxt "*"
+msgid "SVG Export (pen plotter)"
+msgstr "SVG Export (pen plotter)"
+
+msgctxt "*"
+msgid "Line sources"
+msgstr "Line sources"
+
+msgctxt "*"
+msgid "Advanced"
+msgstr "Advanced"
+
+msgctxt "*"
+msgid "Set an active camera first"
+msgstr "Set an active camera first"
+
+msgctxt "*"
+msgid "Run STEP0 or STEP1 first"
+msgstr "Run STEP0 or STEP1 first"
+
+msgctxt "*"
+msgid "Save the .blend to batch cameras"
+msgstr "Save the .blend to batch cameras"
+
+msgctxt "*"
+msgid "Preview"
+msgstr "Preview"
+
+msgctxt "*"
+msgid "Preset"
+msgstr "Preset"
+
+msgctxt "*"
+msgid "Refresh preview"
+msgstr "Refresh preview"
+
+msgctxt "*"
+msgid "Clear preview"
+msgstr "Clear preview"
+
+msgctxt "*"
+msgid "Preview in viewport"
+msgstr "Preview in viewport"
+
+msgctxt "*"
+msgid "Export SVG"
+msgstr "Export SVG"
+
+msgctxt "*"
+msgid "Export checked cameras"
+msgstr "Export checked cameras"
+
+msgctxt "*"
+msgid "Page"
+msgstr "Page"
+
+msgctxt "*"
+msgid "Fit"
+msgstr "Fit"
+
+msgctxt "*"
+msgid "Margin"
+msgstr "Margin"
+
+msgctxt "*"
+msgid "Margin (mm)"
+msgstr "Margin (mm)"
+
+msgctxt "*"
+msgid "Pen width"
+msgstr "Pen width"
+
+msgctxt "*"
+msgid "Pen width (mm)"
+msgstr "Pen width (mm)"
+
+msgctxt "*"
+msgid "Layers"
+msgstr "Layers"
+
+msgctxt "*"
+msgid "One file per layer"
+msgstr "One file per layer"
+
+msgctxt "*"
+msgid "Color separation"
+msgstr "Color separation"
+
+msgctxt "*"
+msgid "Material boundaries"
+msgstr "Material boundaries"
+
+msgctxt "*"
+msgid "Bone boundaries"
+msgstr "Bone boundaries"
+
+msgctxt "*"
+msgid "Open edges"
+msgstr "Open edges"
+
+msgctxt "*"
+msgid "Silhouette"
+msgstr "Silhouette"
+
+msgctxt "*"
+msgid "Honour STEP4 paint"
+msgstr "Honour STEP4 paint"
+
+msgctxt "*"
+msgid "Paths"
+msgstr "Paths"
+
+msgctxt "*"
+msgid "Merge (mm)"
+msgstr "Merge (mm)"
+
+msgctxt "*"
+msgid "Merge tolerance"
+msgstr "Merge tolerance"
+
+msgctxt "*"
+msgid "Simplify"
+msgstr "Simplify"
+
+msgctxt "*"
+msgid "Simplify (mm)"
+msgstr "Simplify (mm)"
+
+msgctxt "*"
+msgid "Sort draw order"
+msgstr "Sort draw order"
+
+msgctxt "*"
+msgid "Outline layer"
+msgstr "Outline layer"
+
+msgctxt "*"
+msgid "Outline depth step"
+msgstr "Outline depth step"
+
+msgctxt "*"
+msgid "Hidden line removal"
+msgstr "Hidden line removal"
+
+msgctxt "*"
+msgid "Depth resolution"
+msgstr "Depth resolution"
+
+msgctxt "*"
+msgid "Samples per edge"
+msgstr "Samples per edge"
+
+msgctxt "*"
+msgid "Depth bias"
+msgstr "Depth bias"
+
+msgctxt "*"
+msgid "Neighbourhood"
+msgstr "Neighbourhood"
+
+msgctxt "*"
+msgid "Depth neighbourhood"
+msgstr "Depth neighbourhood"
+
+msgctxt "*"
+msgid "Keep hidden lines"
+msgstr "Keep hidden lines"
+
+msgctxt "*"
+msgid "Plot estimate"
+msgstr "Plot estimate"
+
+msgctxt "*"
+msgid "Pen down mm/s"
+msgstr "Pen down mm/s"
+
+msgctxt "*"
+msgid "Travel mm/s"
+msgstr "Travel mm/s"
+
+msgctxt "*"
+msgid "Pen lift (s)"
+msgstr "Pen lift (s)"
+
+msgctxt "*"
+msgid "Pen down speed"
+msgstr "Pen down speed"
+
+msgctxt "*"
+msgid "Travel speed"
+msgstr "Travel speed"
+
+msgctxt "*"
+msgid "Pen lift"
+msgstr "Pen lift"
+
+msgctxt "*"
+msgid "Last export"
+msgstr "Last export"
