@@ -1,5 +1,22 @@
 # FreePencil2 - Changelog
 
+## [2.11.1] - 2026-09-09
+### Fixed
+- **The SVG export failed outright on Blender 4.2**: `OPEN_EXR` there has
+  no `BW` colour mode (only RGB/RGBA), so setting it raised `TypeError`
+  and the depth pass never rendered. `compat.set_color_mode` now falls
+  back to the first mode the build accepts; the reader only takes the
+  first channel, so RGB gives the same result.
+
+### Changed
+- **All four supported Blender versions are now actually tested.** 4.2.23
+  and 4.3.2 were installed alongside 4.5.6 and 5.2.1; the suite (70 tests)
+  passes on each, the package builds and validates on each, and the SVG
+  export produces byte-identical output across all four - 574 edges,
+  71 paths, 195 points, 1458.3 mm drawn, 1578.8 mm travel, same layer
+  split. Previously only 4.5 and 5.2 had been exercised, while the
+  manifest claimed 4.2.0 as the minimum.
+
 ## [2.11.0] - 2026-09-09
 ### Added
 - **Tiling across sheets**, for plotting a drawing larger than the bed.

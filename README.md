@@ -283,16 +283,23 @@ Blender 4.5, from pressing STEP0 until completion (each measured twice).
 ## Supported versions
 
 The same package can be installed on all of the following, and the regression
-tests are run on every version (61 of them now, 21 covering the SVG export).
-The SVG export is confirmed to produce identical results on 4.5.6 and 5.2.1 -
-edges, path count and drawn length all match on a 1M-face model.
+tests are run on **all four** (70 of them now, 30 covering the SVG export).
+| Blender | Status | SVG export | Rendering | Live viewport preview |
+|---|---|---|---|---|
+| 5.2.1 LTS | Recommended | ✅ 70/70 | ✅ | ✅ |
+| 4.5.6 LTS | Recommended | ✅ 70/70 | ✅ | ✅ |
+| 4.3.2 | Verified | ✅ 70/70 | ✅ | ✅ |
+| 4.2.23 LTS | **Limited support** | ✅ 70/70 | ✅ | ❌ |
 
-| Blender | Status | Rendering | Live viewport preview |
-|---|---|---|---|
-| 5.2 LTS | Recommended | ✅ | ✅ |
-| 4.5 LTS | Recommended | ✅ | ✅ |
-| 4.3 | Verified | ✅ | ✅ |
-| 4.2 LTS | **Limited support** | ✅ | ❌ |
+**The SVG export produces identical results on all four.** Edge count, path
+count, point count, drawn length, travel and the per-layer breakdown all match
+exactly on the same scene (574 edges, 71 paths, 195 points, 1458.3 mm drawn,
+1578.8 mm travel on 4.2.23 / 4.3.2 / 4.5.6 / 5.2.1). Unlike the raster path's
+"within 1.1% across four versions", this is geometry rather than pixel
+sampling, so it matches exactly.
+
+The "limited support" note on 4.2 is about the raster live preview (below).
+It does not affect the SVG export.
 
 **About the limited support for 4.2.** F12 rendering produces the same line art as
 the other versions (the difference in line volume for an identical scene is within

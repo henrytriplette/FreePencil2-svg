@@ -229,6 +229,22 @@ def file_output_slot_names(fo) -> list:
     return [s.path for s in fo.file_slots]
 
 
+def set_color_mode(fmt, mode: str) -> str:
+    """色モードを設定する。使えなければ手前の候補へ落とす。
+
+    4.2 の OPEN_EXR は BW を持たず RGB/RGBA しか無い(4.5 以降にはある)。
+    読み出し側は先頭チャンネルしか見ないので、RGB でも結果は変わらない。
+    実際に設定できた値を返す。
+    """
+    for cand in (mode, "RGB", "RGBA"):
+        try:
+            fmt.color_mode = cand
+            return cand
+        except TypeError:
+            continue
+    return fmt.color_mode
+
+
 def file_output_add_slot(fo, name: str, file_format: str = 'PNG',
                          color_mode: str = 'RGBA'):
     """File Output にスロットを1本足し、フォーマットを設定する。
@@ -246,10 +262,10 @@ def file_output_add_slot(fo, name: str, file_format: str = 'PNG',
         if fo.format.media_type != 'IMAGE':
             fo.format.media_type = 'IMAGE'
         fo.format.file_format = file_format
-        fo.format.color_mode = color_mode
+        set_color_mode(fo.format, color_mode)
         return fo.file_output_items.new('RGBA', name)
     fo.format.file_format = file_format
-    fo.format.color_mode = color_mode
+    set_color_mode(fo.format, color_mode)
     return fo.file_slots.new(name)
 
 

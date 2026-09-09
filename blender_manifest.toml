@@ -1,6 +1,6 @@
 schema_version = "1.1.0"
 id = "freepencil2_svg_mod"
-version = "2.11.0"
+version = "2.11.1"
 name = "FreePencil2 - SVG Mod"
 description = "Generates line art from 3D models and writes it as plotter-ready SVG vectors. Fork of FreePencil2 by Masamune Sakaki, with the vector pipeline as the primary output; the original raster pipeline is kept unchanged."
 tagline = "Plotter-ready SVG line art from 3D models"
