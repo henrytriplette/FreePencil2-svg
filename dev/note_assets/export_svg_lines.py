@@ -104,6 +104,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--hatch-levels", type=int, default=2)
     p.add_argument("--hatch-angle", type=float, default=45.0)
     p.add_argument("--hatch-threshold", type=float, default=0.5)
+    p.add_argument("--jitter", type=float, default=0.0,
+                   help="手ぶれの振幅(mm)。0 で無効")
+    p.add_argument("--jitter-scale", type=float, default=8.0,
+                   help="手ぶれの波長(mm)")
+    p.add_argument("--jitter-seed", type=int, default=1)
     p.add_argument("--fit", default="DRAWING",
                    choices=["CAMERA", "DRAWING"],
                    help="紙への合わせ方。DRAWING は描いた範囲を紙いっぱいに")
@@ -252,6 +257,8 @@ def main() -> None:
         hatch=args.hatch, hatch_spacing=args.hatch_spacing,
         hatch_levels=args.hatch_levels, hatch_angle=args.hatch_angle,
         hatch_threshold=args.hatch_threshold,
+        jitter=args.jitter, jitter_scale=args.jitter_scale,
+        jitter_seed=float(args.jitter_seed),
         outline_gap=args.outline_gap, fit=args.fit,
         split_files=args.split_files,
         page=args.page, margin=args.margin, pen=args.pen,

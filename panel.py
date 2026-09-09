@@ -18,6 +18,7 @@ from .half_fill import LINK_MAKE_FP_OT_HALF_FILL
 from .render_cameras import FP_OT_RENDER_CAMERAS
 from .auto_setup import FP_OT_AUTO_SETUP
 from .svg_export import (FP_OT_EXPORT_SVG, FP_OT_EXPORT_SVG_CAMERAS,
+                         FPM_OT_EXPORT_SVG_FRAMES,
                          FP_OT_SVG_PRESET, FP_OT_SVG_PREVIEW,
                          FP_OT_SVG_PREVIEW_CLEAR, VCOL_LAYER_MECHA)
 from . import svg_export
@@ -136,12 +137,24 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         col.prop(scene, "fpm_svg_hatch_angle", text=t("Hatch angle"))
         col.prop(scene, "fpm_svg_hatch_threshold", text=t("Hatch threshold"))
 
+        col = layout.column(align=True)
+        col.label(text=t("Hand jitter"))
+        col.prop(scene, "fpm_svg_jitter", text=t("Jitter (mm)"))
+        sub = col.column(align=True)
+        sub.enabled = scene.fpm_svg_jitter > 0.0
+        sub.prop(scene, "fpm_svg_jitter_scale", text=t("Jitter scale (mm)"))
+        sub.prop(scene, "fpm_svg_jitter_seed", text=t("Jitter seed"))
+
         layout.operator(FP_OT_EXPORT_SVG.bl_idname,
                         text=t("Export SVG"), icon="EXPORT")
         row = layout.row()
         row.enabled = bool(bpy.data.filepath)
         row.operator(FP_OT_EXPORT_SVG_CAMERAS.bl_idname,
                      text=t("Export checked cameras"), icon="RENDER_RESULT")
+        row = layout.row()
+        row.enabled = bool(bpy.data.filepath)
+        row.operator(FPM_OT_EXPORT_SVG_FRAMES.bl_idname,
+                     text=t("Export frame range"), icon="RENDER_ANIMATION")
         if not bpy.data.filepath:
             layout.label(text=t("Save the .blend to batch cameras"),
                          icon="INFO")

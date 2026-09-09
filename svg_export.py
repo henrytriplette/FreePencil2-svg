@@ -93,7 +93,7 @@ class SvgOptions:
                  "fit", "plot_speed", "travel_speed", "pen_lift",
                  "split_files", "depth_bands", "depth_weight",
                  "hatch", "hatch_spacing", "hatch_levels", "hatch_angle",
-                 "hatch_threshold")
+                 "hatch_threshold", "jitter", "jitter_scale", "jitter_seed")
 
     def __init__(self, page="A4", margin=10.0, pen=0.3, merge_tolerance=0.1,
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
@@ -103,7 +103,11 @@ class SvgOptions:
                  plot_speed=80.0, travel_speed=200.0, pen_lift=0.12,
                  split_files=False, depth_bands=3, depth_weight=0.6,
                  hatch=False, hatch_spacing=1.2, hatch_levels=2,
-                 hatch_angle=45.0, hatch_threshold=0.5):
+                 hatch_angle=45.0, hatch_threshold=0.5,
+                 jitter=0.0, jitter_scale=8.0, jitter_seed=1.0):
+        self.jitter = jitter
+        self.jitter_scale = jitter_scale
+        self.jitter_seed = jitter_seed
         self.split_files = split_files
         self.depth_bands = depth_bands
         self.depth_weight = depth_weight
@@ -173,6 +177,9 @@ class SvgOptions:
             hatch_levels=g(scene, "fpm_svg_hatch_levels", 2),
             hatch_angle=g(scene, "fpm_svg_hatch_angle", 45.0),
             hatch_threshold=g(scene, "fpm_svg_hatch_threshold", 0.5),
+            jitter=g(scene, "fpm_svg_jitter", 0.0),
+            jitter_scale=g(scene, "fpm_svg_jitter_scale", 8.0),
+            jitter_seed=float(g(scene, "fpm_svg_jitter_seed", 1)),
         )
 
 
@@ -1056,6 +1063,67 @@ def page_mm(page: str, width: int, height: int) -> tuple:
     return (long_, short) if width >= height else (short, long_)
 
 
+def _hash2(a, b, seed: float):
+    """位置から -1..1 を返す。GLSL でよく使う sin ハッシュ。"""
+    v = np.sin(a * 127.1 + b * 311.7 + seed * 0.017) * 43758.5453
+    return 2.0 * (v - np.floor(v)) - 1.0
+
+
+def noise_field(x, y, seed: float):
+    """格子点のハッシュを双一次補間した値ノイズ。-1..1。
+
+    揺らぎを「点ごとの乱数」ではなく「位置の関数」にしてある。端点を
+    共有する別々の折れ線が同じ量だけ動くので、繋ぎ目が開かない。
+    """
+    xi, yi = np.floor(x), np.floor(y)
+    xf, yf = x - xi, y - yi
+    u = xf * xf * (3.0 - 2.0 * xf)
+    v = yf * yf * (3.0 - 2.0 * yf)
+    n00 = _hash2(xi, yi, seed)
+    n10 = _hash2(xi + 1.0, yi, seed)
+    n01 = _hash2(xi, yi + 1.0, seed)
+    n11 = _hash2(xi + 1.0, yi + 1.0, seed)
+    return (n00 * (1 - u) + n10 * u) * (1 - v) + \
+           (n01 * (1 - u) + n11 * u) * v
+
+
+def densify(pts: np.ndarray, step: float) -> np.ndarray:
+    """長い直線に点を足す。2点しかない線は揺らしようがないため。"""
+    if step <= 0 or len(pts) < 2:
+        return pts
+    seg = pts[1:] - pts[:-1]
+    length = np.hypot(seg[:, 0], seg[:, 1])
+    counts = np.maximum(1, np.ceil(length / step).astype(np.int64))
+    out = [pts[:1]]
+    for i, n in enumerate(counts):
+        t = (np.arange(1, n + 1) / n)[:, None]
+        out.append(pts[i] + seg[i] * t)
+    return np.concatenate(out)
+
+
+def jitter_lines(lines: list, opts: SvgOptions) -> list:
+    """折れ線を手で引いたように揺らす。座標は紙の mm。
+
+    CAD から出した線はきれいすぎて機械が描いたように見える。位置に
+    紐づいたノイズで法線方向へずらすと、線の意味を変えずに手描きらしさが出る。
+    """
+    if opts.jitter <= 0.0:
+        return lines
+    scale = max(opts.jitter_scale, 1e-6)
+    out = []
+    for ln in lines:
+        pts = densify(ln, scale * 0.25)
+        if len(pts) < 2:
+            out.append(ln)
+            continue
+        nx = noise_field(pts[:, 0] / scale, pts[:, 1] / scale, opts.jitter_seed)
+        ny = noise_field(pts[:, 0] / scale + 17.3,
+                         pts[:, 1] / scale - 9.1, opts.jitter_seed)
+        moved = pts + np.stack([nx, ny], axis=1) * opts.jitter
+        out.append(moved)
+    return out
+
+
 def _layer_order(names) -> list:
     """レイヤーの並びを決める。知っている名前は決め打ち、残りは名前順。"""
     known = [n for n in _LAYER_ORDER_HINT if n in names]
@@ -1171,6 +1239,8 @@ def build_svg(groups, width: int, height: int, opts: SvgOptions,
         merged_total += len(merged)
         lines = [s for s in (rdp(ln, opts.simplify) for ln in merged)
                  if len(s) >= 2]
+        # 揺らすのは間引いた後。先にやると RDP がならして消してしまう
+        lines = jitter_lines(lines, opts)
         if opts.sort:
             lines = linesort(lines)
         pen_up += pen_up_travel(lines)
@@ -1626,4 +1696,63 @@ class FP_OT_EXPORT_SVG_CAMERAS(bpy.types.Operator):
                         f"({len(failed)} failed: {failed[0]})")
         else:
             self.report({'INFO'}, f"{done} cameras -> {root}")
+        return {'FINISHED'}
+
+
+class FPM_OT_EXPORT_SVG_FRAMES(bpy.types.Operator):
+    """Export one SVG per frame over the scene's frame range."""
+
+    bl_idname = "fpm.export_svg_frames"
+    bl_label = "Export frame range"
+    bl_description = ("Write one SVG per frame into //svg_exports/, using "
+                      "the scene's frame range and step")
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(bpy.data.filepath) and context.scene.camera is not None
+
+    def execute(self, context):
+        import os
+
+        scene = context.scene
+        if not bpy.data.filepath:
+            self.report({'ERROR'}, "Save the .blend file first")
+            return {'CANCELLED'}
+
+        root = bpy.path.abspath("//svg_exports")
+        os.makedirs(root, exist_ok=True)
+        opts = SvgOptions.from_scene(scene)
+
+        start, end = scene.frame_start, scene.frame_end
+        step = max(1, scene.frame_step)
+        frames = list(range(start, end + 1, step))
+        if not frames:
+            self.report({'ERROR'}, "Empty frame range")
+            return {'CANCELLED'}
+
+        original = scene.frame_current
+        done, failed = 0, []
+        try:
+            for frame in frames:
+                scene.frame_set(frame)
+                # 対象はフレームごとに取り直す。可視性はアニメーションで
+                # 変わりうるし、評価後のメッシュも当然変わる
+                objs = target_objects(context)
+                out = os.path.join(root, f"frame_{frame:04d}.svg")
+                try:
+                    export_svg(context, out, opts, objs)
+                    done += 1
+                except RuntimeError as exc:
+                    logger.exception("SVG export failed on frame %s", frame)
+                    failed.append(f"{frame}: {exc}")
+        finally:
+            scene.frame_set(original)
+
+        if failed:
+            self.report({'WARNING'},
+                        f"{done}/{len(frames)} frames -> {root} "
+                        f"({len(failed)} failed: {failed[0]})")
+        else:
+            self.report({'INFO'}, f"{done} frames -> {root}")
         return {'FINISHED'}

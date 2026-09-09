@@ -747,3 +747,27 @@ msgstr "ハッチの角度"
 msgctxt "*"
 msgid "Hatch threshold"
 msgstr "ハッチのしきい値"
+
+msgctxt "*"
+msgid "Hand jitter"
+msgstr "手ぶれ"
+
+msgctxt "*"
+msgid "Jitter (mm)"
+msgstr "手ぶれの振幅 (mm)"
+
+msgctxt "*"
+msgid "Jitter scale"
+msgstr "手ぶれの波長"
+
+msgctxt "*"
+msgid "Jitter scale (mm)"
+msgstr "手ぶれの波長 (mm)"
+
+msgctxt "*"
+msgid "Jitter seed"
+msgstr "手ぶれのシード"
+
+msgctxt "*"
+msgid "Export frame range"
+msgstr "フレーム範囲を書き出す"

@@ -666,3 +666,27 @@ msgstr "Hatch angle"
 msgctxt "*"
 msgid "Hatch threshold"
 msgstr "Hatch threshold"
+
+msgctxt "*"
+msgid "Hand jitter"
+msgstr "Hand jitter"
+
+msgctxt "*"
+msgid "Jitter (mm)"
+msgstr "Jitter (mm)"
+
+msgctxt "*"
+msgid "Jitter scale"
+msgstr "Jitter scale"
+
+msgctxt "*"
+msgid "Jitter scale (mm)"
+msgstr "Jitter scale (mm)"
+
+msgctxt "*"
+msgid "Jitter seed"
+msgstr "Jitter seed"
+
+msgctxt "*"
+msgid "Export frame range"
+msgstr "Export frame range"

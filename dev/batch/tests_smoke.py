@@ -2454,6 +2454,91 @@ def t64():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@test("SVG: jitter is off by default and keeps shared ends together")
+def t65():
+    import numpy as np
+    from freepencil2 import svg_export
+
+    assert svg_export.SvgOptions().jitter == 0.0, "手ぶれは既定で切る"
+
+    # 端点を共有する2本。揺らしても離れてはいけない
+    a = np.array([[10.0, 10.0], [40.0, 10.0]])
+    b = np.array([[40.0, 10.0], [40.0, 45.0]])
+    opts = svg_export.SvgOptions(jitter=1.0, jitter_scale=8.0)
+    ja, jb = svg_export.jitter_lines([a, b], opts)
+
+    gap = float(np.hypot(*(ja[-1] - jb[0])))
+    assert gap < 1e-9, (
+        f"共有していた端点が {gap:.4f}mm 離れた。"
+        "点ごとの乱数ではなく位置のノイズで動かすこと")
+
+    # 実際に動いていること、動きすぎないこと
+    moved = float(np.abs(ja[0] - a[0]).max())
+    assert moved > 1e-6, "まったく動いていない"
+    assert float(np.abs(ja - ja).max()) == 0.0
+    for pt in ja:
+        d = np.hypot(*(pt - a[0])), np.hypot(*(pt - a[-1]))
+        assert min(d) <= 40.0 + 3.0, "元の線から離れすぎ"
+
+    # 直線は点を足さないと揺らせない
+    assert len(ja) > len(a), "densify が効いていない"
+
+    same = svg_export.jitter_lines([a], opts)[0]
+    assert np.allclose(same, ja), "同じ入力で結果が変わる(決定的でない)"
+
+
+@test("SVG: jitter barely changes the drawn length")
+def t66():
+    import numpy as np
+    from freepencil2 import svg_export
+
+    rng = np.random.default_rng(3)
+    lines = [np.array([[10.0, 10.0 + i * 3.0], [120.0, 10.0 + i * 3.0]])
+             for i in range(20)]
+
+    def drawn(ls):
+        return sum(float(np.hypot(*(p[1:] - p[:-1]).T).sum()) for p in ls)
+
+    base = drawn(lines)
+    out = svg_export.jitter_lines(
+        lines, svg_export.SvgOptions(jitter=0.5, jitter_scale=8.0))
+    got = drawn(out)
+    assert got >= base, "揺らして短くなるのはおかしい"
+    assert got < base * 1.10, f"伸びすぎ: {base:.1f} -> {got:.1f}"
+    assert rng is not None
+
+
+@test("SVG: frame batch writes one file per frame and restores the frame")
+def t67():
+    import shutil
+    import tempfile
+
+    _svg_scene()
+    scene = bpy.context.scene
+    scene.frame_start, scene.frame_end, scene.frame_step = 1, 3, 1
+    scene.frame_set(2)
+    scene.fpm_svg_depth_res = 320
+
+    tmp = Path(tempfile.mkdtemp(prefix="fpm_svg_"))
+    try:
+        bpy.ops.wm.save_as_mainfile(filepath=str(tmp / "anim.blend"))
+        scene = bpy.context.scene
+        scene.fpm_svg_depth_res = 320
+
+        res = bpy.ops.fpm.export_svg_frames()
+        assert res == {"FINISHED"}, res
+
+        out = Path(bpy.path.abspath("//svg_exports"))
+        svgs = sorted(p.name for p in out.glob("frame_*.svg"))
+        assert svgs == ["frame_0001.svg", "frame_0002.svg",
+                        "frame_0003.svg"], svgs
+        assert bpy.context.scene.frame_current == 2, (
+            "元のフレームに戻っていない")
+    finally:
+        bpy.ops.wm.read_homefile(use_empty=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     print("[tests] FreePencil smoke tests")
     fp_batch.install_addon()

@@ -1,5 +1,19 @@
 # FreePencil2 - Changelog
 
+## [2.10.0] - 2026-09-09
+### Added
+- **Hand jitter** (off by default). Wobbles the lines so they read as drawn
+  rather than machined. The offset is a function of position rather than a
+  random value per point, so lines that shared an end still share it after
+  wobbling - per-point randomness would open a gap at every junction.
+  Straight runs are densified first, since a two-point line has nothing to
+  bend. A 0.5 mm wobble lengthens the drawing by under 1%.
+
+- **Frame range batch.** `Export frame range` writes
+  `//svg_exports/frame_####.svg` across the scene's frame range and step,
+  re-evaluating the meshes each frame so deforming rigs export correctly,
+  and restores the current frame afterwards.
+
 ## [2.9.0] - 2026-09-09
 ### Added
 - **Depth-cued line weight.** `Layers -> By depth` bands the drawing from

@@ -577,6 +577,23 @@ def register_props():
                          "pen width. Lower = more depth cueing"),
             default=0.6, min=0.1, max=1.0
         ),
+        "fpm_svg_jitter": FloatProperty(
+            name="Hand jitter",
+            description=("Wobble the lines by this much (mm) so they read as "
+                         "drawn rather than machined. 0 = off"),
+            default=0.0, min=0.0, max=5.0
+        ),
+        "fpm_svg_jitter_scale": FloatProperty(
+            name="Jitter scale",
+            description=("Wavelength of the wobble (mm). Small = shaky, "
+                         "large = long lazy curves"),
+            default=8.0, min=0.5, max=100.0
+        ),
+        "fpm_svg_jitter_seed": IntProperty(
+            name="Jitter seed",
+            description="Change for a different wobble",
+            default=1, min=0, max=9999
+        ),
         "fpm_svg_hatch": BoolProperty(
             name="Hatching",
             description=("Add hatching from the diffuse light pass, as its "
@@ -730,6 +747,7 @@ def unregister_props():
         "fpm_svg_depth_bands", "fpm_svg_depth_weight", "fpm_svg_hatch",
         "fpm_svg_hatch_spacing", "fpm_svg_hatch_levels",
         "fpm_svg_hatch_angle", "fpm_svg_hatch_threshold",
+        "fpm_svg_jitter", "fpm_svg_jitter_scale", "fpm_svg_jitter_seed",
         "fpm_svg_fit", "fpm_svg_preview", "fpm_svg_plot_speed",
         "fpm_svg_travel_speed", "fpm_svg_pen_lift", "fpm_svg_last_result",
         "fpm_svg_split_files"

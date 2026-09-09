@@ -181,7 +181,21 @@ frame, 246x190 mm and 3802 paths by drawing bounds - the latter is the count
 you actually get at that pen size. Choose the camera frame only when you want
 the composition reproduced on the paper as-is.
 
-### Presets and camera batch
+### Hand jitter
+
+**Hand jitter** (0 = off) wobbles the lines so they read as drawn rather than
+machined — CAD output is otherwise conspicuously perfect.
+
+The offset is a function of *position*, not a random value per point, so two
+lines that shared an end still share it after wobbling; per-point randomness
+would open gaps at every junction. Straight runs are densified first, since a
+two-point line has nothing to bend. Measured on the demo: a 0.5 mm wobble
+lengthens the drawing by under 1%.
+
+`Jitter scale` is the wavelength — small is shaky, large gives long lazy
+curves.
+
+### Presets, camera batch and frame range
 
 **Preset** at the top of the panel holds the usual combinations (`Fine pen`,
 `Bold outline, 2 pens`, `Quick draft`).
@@ -189,6 +203,10 @@ the composition reproduced on the paper as-is.
 **Export checked cameras** writes `//svg_exports/NN_<camera>.svg` for every
 camera ticked in STEP5 (the .blend must be saved). If one camera fails the
 rest are still written, and the failure is reported.
+
+**Export frame range** writes `//svg_exports/frame_####.svg` over the
+scene's frame range and step, re-evaluating the meshes each frame, so
+deforming rigs export correctly. The current frame is restored afterwards.
 
 The settings are split across three panels: what you touch every time is in
 the parent, with line sources and the finer settings in their own sub-panels.
