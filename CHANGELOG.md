@@ -1,6 +1,6 @@
 # FreePencil2 - Changelog
 
-## [2.11.3] - 2026-09-10
+## [2.12.0] - 2026-09-10
 ### Changed
 - **STEP0 no longer builds the raster pipeline by default.** The SVG export -
   the point of this fork - reads the vertex colours straight off the mesh and
