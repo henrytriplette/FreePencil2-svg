@@ -1,6 +1,49 @@
 # FreePencil2 - Changelog
 
 ## [2.11.3] - 2026-09-10
+### Changed
+- **STEP0 no longer builds the raster pipeline by default.** The SVG export -
+  the point of this fork - reads the vertex colours straight off the mesh and
+  renders only a depth pass; it never touches the compositor. STEP0 ran STEP1,
+  STEP2 and STEP3 unconditionally anyway, so a user who only wanted an SVG got
+  an AOV group injected into every material, a compositor tree built, the
+  viewport switched to Rendered and every material previewed in white. Three
+  visible changes with nothing to do with the file they were after - and the
+  usual reading of that is "the add-on broke my scene".
+
+  STEP0 now stops after the paint. `fpm_auto_raster` (off by default) brings
+  back STEP2/STEP3, and the raster-only options in the STEP0 panel (AA,
+  supersampling, AOV detection, white preview, File Output) are grouped under
+  it and greyed out while it is off. The button says which of the two it will
+  do. Existing raster users tick one box; the twelve smoke tests that used
+  STEP0 as a shortcut to build everything now opt in explicitly.
+
+  The BLEND-to-HASHED conversion stays ungated: alpha-blended materials do not
+  write depth in EEVEE, so it matters to the SVG depth pass too, not just AOVs.
+
+- **The sidebar says where you are.** The parent panel now shows camera,
+  colour separation and preview state as ticks or warnings, then offers the
+  next button to press. Where the SVG panel used to say "Run STEP0 or STEP1
+  first" it now shows the actual Auto setup button.
+
+- **Panel order was undefined between two pairs.** `FP_PT_SvgSources` and
+  `FP_PT_Step0` both declared `bl_order = 0`, and `FP_PT_SvgAdvanced` and
+  `FP_PT_Step1` both declared `1`, so the sidebar order was down to
+  registration order - exactly what the `_FPSub` docstring says `bl_order`
+  exists to prevent. The SVG family moved to -3/-2/-1, and a test now asserts
+  the values stay unique.
+
+- **Labels say which branch a panel belongs to** - STEP2 and STEP3 are marked
+  "raster render only", STEP5 covers both batches, and the implementation
+  vocabulary is off the buttons ("Generate Sample Node" for two different
+  operators is now "Set up AOVs" and "Build compositor nodes"; "Select Node
+  Type" is "Node type").
+
+- **Both camera batch buttons sit with the camera list.** The ticks feed the
+  SVG batch and the raster batch, but only the raster button was next to them;
+  the SVG panel now also reports how many cameras are ticked and where to
+  change that.
+
 ### Added
 - **Reset panel.** One button that takes the add-on back out of the scene:
   the AOV group is removed from every material, the compositor nodes STEP3

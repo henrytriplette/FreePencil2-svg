@@ -26,10 +26,29 @@ The hard part of the color-separation method has always been the preprocessing â
 - Assigns distinct tones to parts that touch each other
 - Per-bone color separation via rig detection
 
-A single press of "Fully automatic setup" in STEP0 completes everything from the
-color separation to building the compositor nodes. Anywhere you don't like the
-automatic result, you can touch it up with vertex painting in STEP4 (redraw the
-color separation / add lines / remove lines).
+A single press of **STEP0: Full Auto** paints the color separation - everything
+the SVG export needs. Anywhere you don't like the automatic result, you can
+touch it up with vertex painting in STEP4 (redraw the color separation / add
+lines / remove lines).
+
+### The two paths
+
+The panel has one branch, not one line:
+
+| you want | you need |
+|---|---|
+| **SVG for a plotter** (the point of this fork) | STEP0 or STEP1 - the paint. That's all |
+| A rendered image (F12) | STEP0 with **Also set up the raster render** ticked, or STEP2 + STEP3 by hand |
+
+The SVG export reads the vertex colours straight off the mesh and renders only
+a depth pass; it never goes through the compositor. So STEP2 (AOV) and STEP3
+(compositor nodes) are for the raster path only, and STEP0 leaves them alone
+unless you ask for them - building them switches the viewport to Rendered and
+turns on the white-material preview, which looks alarming when all you wanted
+was an SVG.
+
+The top of the sidebar shows where you are (camera, colour separation,
+preview) and offers the next button to press.
 
 ## Running alongside the original
 
@@ -60,8 +79,9 @@ the same painted meshes.
 
 ## SVG export (pen plotter)
 
-Export from **SVG Export (pen plotter)**, the first section of the sidebar.
-Run it after the color separation is done (STEP0 or STEP1).
+Export from **SVG export (pen plotter)**, the first section of the sidebar.
+Run it after the color separation is done (STEP0 or STEP1). Nothing else is
+required - no AOVs, no compositor.
 
 It does not trace the rendered image. The vectors come from the definition of
 a line itself â€” an edge whose two adjacent faces differ in color. The
