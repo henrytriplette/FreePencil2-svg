@@ -57,6 +57,40 @@ def score(rec: dict) -> float:
     return round(0.45 * ink_score + 0.30 * frag_score + 0.25 * sep_score, 4)
 
 
+def svg_link(sv: dict) -> str:
+    path = sv.get("svg") if sv else None
+    return f'<br><a href="{path}" class="svglink">SVG</a>' if path else ""
+
+
+def fmt_mm(v) -> str:
+    """mm はモデルによって桁が違うので、m を超えたら m にする。"""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return ""
+    return f"{v / 1000.0:.1f}m" if v >= 1000.0 else f"{v:.0f}mm"
+
+
+def fmt_time(sec) -> str:
+    try:
+        sec = float(sec)
+    except (TypeError, ValueError):
+        return ""
+    return f"{sec / 60.0:.0f}min" if sec >= 60.0 else f"{sec:.0f}s"
+
+
+def svg_cell_line(r: dict) -> str:
+    """行内に出す SVG の要点。計測していなければ空。"""
+    sv = r.get("svg_metrics")
+    if not sv:
+        return ('<br><span class="nosvg">SVG: '
+                + html.escape(r.get("svg_error", "not measured")) + "</span>"
+                ) if r.get("svg_error") else ""
+    return (f'<br>svg {sv.get("paths", "")}本 / '
+            f'{fmt_mm(sv.get("draw_mm"))} + {fmt_mm(sv.get("pen_up_mm"))}移動 / '
+            f'{fmt_time(sv.get("estimated_seconds"))}')
+
+
 def cell_html(r: dict | None) -> str:
     if r is None:
         return "<td>&mdash;</td>"
@@ -71,6 +105,7 @@ def cell_html(r: dict | None) -> str:
     return (f'<td>{img}<div class="m">score <b>{r["score"]:.3f}</b><br>'
             f'ink {la.get("ink_ratio", 0):.4f} / comp {la.get("components", "")}<br>'
             f'viol {mm.get("min_distance_violations", "")}/{mm.get("adjacent_color_pairs", "")}'
+            f'{svg_cell_line(r)}'
             f'<br>{r.get("step1_seconds", "")}s + {r.get("render_seconds", "")}s</div></td>')
 
 
@@ -116,6 +151,7 @@ def main(out: Path | str | None = None) -> None:
     for r in recs:
         la = r.get("lineart_metrics", {})
         mm = r.get("mesh_metrics", {})
+        sv = r.get("svg_metrics", {})
         img = (
             f'<a href="{r["render"]}"><img src="{r["render"]}" loading="lazy"></a>'
             if r.get("render") else "&mdash;"
@@ -138,11 +174,16 @@ def main(out: Path | str | None = None) -> None:
       <small>{r.get('faces_total', '?')} faces / {r.get('mesh_objects', '?')} obj /
       seed {r['seed']} / {html.escape(r['preset'])} /
       {html.escape(r.get('material', 'keep'))}</small>{err}</td>
-  <td>{r['score']:.3f}</td>
+  <td>{r['score']:.3f}{svg_link(sv)}</td>
   <td>{la.get('ink_ratio', '')}</td>
   <td>{la.get('components', '')}</td>
   <td>{mm.get('distinct_colors', '')}</td>
   <td>{mm.get('min_distance_violations', '')}/{mm.get('adjacent_color_pairs', '')}</td>
+  <td>{sv.get('paths', '')}</td>
+  <td>{fmt_mm(sv.get('draw_mm'))}</td>
+  <td>{fmt_mm(sv.get('pen_up_mm'))}</td>
+  <td>{sv.get('travel_ratio', '')}</td>
+  <td>{fmt_time(sv.get('estimated_seconds'))}</td>
   <td>{r.get('step1_seconds', '')}s</td>
   <td>{r.get('render_seconds', '')}s</td>
 </tr>""")
@@ -159,6 +200,8 @@ def main(out: Path | str | None = None) -> None:
  tr.fail, td.fail {{ background: #fff2f2; }}
  .err {{ color: #b00; font-size: 11px; max-width: 320px; }}
  .adapt {{ color: #06c; font-size: 11px; }}
+ .nosvg {{ color: #999; font-size: 11px; }}
+ .svglink {{ font-size: 11px; }}
  .summary {{ margin-bottom: 16px; }}
  .wrap {{ overflow-x: auto; margin-bottom: 24px; }}
  .matrix img {{ width: 150px; height: 150px; }}
@@ -172,13 +215,18 @@ def main(out: Path | str | None = None) -> None:
  生成: {datetime.now().strftime('%Y-%m-%d %H:%M')} /
  成功 <b>{len(ok)}</b> ・ 失敗 <b>{len(fail)}</b> / 全 {len(recs)} ラン
  / プリセット: {html.escape(', '.join(presets))}<br>
- スコア: 線密度(45%) + 線の断片化(30%) + 塗り分け違反率(25%) の加重。降順ソート。
+ スコア: 線密度(45%) + 線の断片化(30%) + 塗り分け違反率(25%) の加重。降順ソート。<br>
+ <small>SVG の列はプロッタ向けの実測値（本数・描く距離・ペンの移動距離・
+ 移動比・所要時間の目安）。<b>スコアには入れていない</b>——過去のレポートと
+ 比べられなくなるため。移動比は「移動距離÷描く距離」で、低いほど無駄がない。</small>
 </div>
 {matrix}
 <h2>スコア順一覧</h2>
 <table>
 <tr><th>線画</th><th>モデル</th><th>score</th><th>ink</th><th>components</th>
-<th>colors</th><th>violations</th><th>STEP1</th><th>render</th></tr>
+<th>colors</th><th>violations</th>
+<th>本数</th><th>描画</th><th>移動</th><th>移動比</th><th>目安</th>
+<th>STEP1</th><th>render</th></tr>
 {''.join(rows)}
 </table>
 

@@ -46,6 +46,8 @@ def parse_args() -> argparse.Namespace:
                    help="comma-separated substrings; keep only matching model names")
     p.add_argument("--material", choices=["white", "keep"], default="white")
     p.add_argument("--supersample", type=int, default=2)
+    p.add_argument("--no-svg", action="store_true",
+                   help="SVG 書き出しの計測を省く")
     p.add_argument("--turntable", type=int, default=0)
     p.add_argument("--fps", type=int, default=12)
     p.add_argument("--res", type=int, default=1024)
@@ -90,6 +92,7 @@ def run_one(out_dir: Path, model: dict, preset: str, args: argparse.Namespace) -
         args.blender, "-b", "--factory-startup", "-P", str(FP_BATCH), "--",
         "--blend", model["path"], "--name", model["name"],
         "--seed", str(args.seed), "--preset", preset,
+        *(["--no-svg"] if args.no_svg else []),
         "--material", args.material,
         "--supersample", str(args.supersample),
         "--turntable", str(args.turntable), "--fps", str(args.fps),

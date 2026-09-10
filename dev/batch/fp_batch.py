@@ -65,6 +65,8 @@ def parse_args() -> argparse.Namespace:
                    help="render N frames orbiting 360deg and encode an mp4 "
                         "with per-frame metrics. 0 = off")
     p.add_argument("--fps", type=int, default=12)
+    p.add_argument("--no-svg", action="store_true",
+                   help="SVG 書き出しの計測を省く(ラスタだけ見たいとき)")
     return p.parse_args(argv)
 
 
@@ -692,7 +694,9 @@ def run_pipeline(args: argparse.Namespace, preset: dict, out_dir: Path,
         scene.fpm_node_type = "pro"
         scene.fpm_enable_compositor_view = False
         for key, value in (overrides or {}).items():
-            if key.startswith("fp_"):
+            # プロパティ名は fpm_ 接頭辞。"fp_" で判定すると 'fpm_...' は
+            # 3文字目が '_' でないため一致せず、上書きが黙って無視される
+            if key.startswith("fpm_"):
                 setattr(scene, key, value)
 
         select_meshes()
@@ -740,6 +744,17 @@ def run_pipeline(args: argparse.Namespace, preset: dict, out_dir: Path,
             objs, preset["min_neighbor_color_distance"])
         record["lineart_metrics"] = lineart_metrics(png)
 
+        if not args.no_svg:
+            # 失敗しても計測全体は落とさない。ラスタ側の記録は残したい
+            t_svg = time.time()
+            try:
+                record["svg_metrics"] = svg_metrics(out_dir, args, tag)
+                record["svg_metrics"]["seconds"] = round(
+                    time.time() - t_svg, 2)
+            except Exception as exc:
+                record["svg_error"] = f"{type(exc).__name__}: {exc}"
+                print(f"[fp_batch] SVG metrics failed: {exc}")
+
         if args.turntable > 0:
             t3 = time.time()
             record["turntable"] = render_turntable(
@@ -751,6 +766,43 @@ def run_pipeline(args: argparse.Namespace, preset: dict, out_dir: Path,
         record["error"] = traceback.format_exc()
     record["total_seconds"] = round(time.time() - t0, 2)
     return record
+
+
+def svg_metrics(out_dir: Path, args, tag: str) -> dict:
+    """SVG 書き出しを1回通して、プロッタ向けの指標を採る。
+
+    ラスタの ink/components が「線が出ているか」を見るのに対し、こちらは
+    「実際に引けるか」を見る。本数とペン移動は紙に落としたときの手間に
+    直結するので、モデルごとの比較にはこちらのほうが効く。
+    """
+    from freepencil2 import svg_export
+
+    svg_dir = out_dir / "svg"
+    svg_dir.mkdir(parents=True, exist_ok=True)
+    path = svg_dir / (f"{args.name}_seed{args.seed}_{args.preset}"
+                      f"_{args.material}{tag}.svg")
+
+    opts = svg_export.SvgOptions(depth_res=args.res, layers="SOURCE")
+    stats = svg_export.export_svg(bpy.context, str(path), opts)
+
+    raw = max(1, stats.get("paths_raw", 1))
+    draw = max(1e-9, stats.get("draw_mm", 0.0))
+    return {
+        "paths": stats.get("paths"),
+        "paths_raw": stats.get("paths_raw"),
+        "points": stats.get("points"),
+        "draw_mm": stats.get("draw_mm"),
+        "pen_up_mm": stats.get("pen_up_mm"),
+        "estimated_seconds": stats.get("estimated_seconds"),
+        "edges_line": stats.get("edges_line"),
+        "edges_by_source": stats.get("edges_by_source"),
+        "layers": stats.get("layers"),
+        # 鎖がどれだけ1本にまとまったか。低いほどよく繋がっている
+        "merge_ratio": round(stats.get("paths", 0) / raw, 4),
+        # 描く距離に対する移動距離。低いほど無駄なくプロットできる
+        "travel_ratio": round(stats.get("pen_up_mm", 0.0) / draw, 4),
+        "svg": str(path.relative_to(out_dir)).replace("\\", "/"),
+    }
 
 
 # 線密度の目標帯(スコアの許容帯と同じ)。帯から外れた度合いで比較する

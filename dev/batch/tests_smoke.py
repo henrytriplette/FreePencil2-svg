@@ -2634,6 +2634,82 @@ def t70():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@test("batch: svg_metrics returns the plotter figures and ratios")
+def t71():
+    import shutil
+    import tempfile
+    from types import SimpleNamespace
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fpm_batch_"))
+    try:
+        args = SimpleNamespace(name="unit", seed=42, preset="default",
+                               material="white", res=320)
+        got = fp_batch.svg_metrics(tmp, args, "")
+
+        for key in ("paths", "paths_raw", "points", "draw_mm", "pen_up_mm",
+                    "estimated_seconds", "edges_line", "merge_ratio",
+                    "travel_ratio", "svg"):
+            assert key in got, f"{key} が無い"
+        assert got["paths"] > 0 and got["draw_mm"] > 0
+
+        # 比は定義どおりか。表の読み方が変わると困るので固定する
+        assert abs(got["merge_ratio"]
+                   - got["paths"] / got["paths_raw"]) < 1e-3
+        assert abs(got["travel_ratio"]
+                   - got["pen_up_mm"] / got["draw_mm"]) < 1e-3
+
+        assert (tmp / got["svg"]).exists(), got["svg"]
+        assert "/" in got["svg"], "レポートから辿れる相対パスであること"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("batch: the report still renders for runs that have no SVG metrics")
+def t72():
+    """SVG の計測を足す前に採った metrics/*.json が残っていても、
+    レポートが落ちてはいけない。"""
+    import json
+    import shutil
+    import sys
+    import tempfile
+
+    sys.path.insert(0, str(BATCH))
+    import make_report
+
+    tmp = Path(tempfile.mkdtemp(prefix="fpm_report_"))
+    try:
+        (tmp / "metrics").mkdir(parents=True)
+        old = {"name": "old", "seed": 1, "preset": "default",
+               "material": "white", "ok": True, "faces_total": 100,
+               "mesh_objects": 1, "step1_seconds": 1.0,
+               "render_seconds": 2.0,
+               "lineart_metrics": {"ink_ratio": 0.05, "components": 10},
+               "mesh_metrics": {"distinct_colors": 4,
+                                "adjacent_color_pairs": 6,
+                                "min_distance_violations": 0}}
+        new = dict(old, name="new",
+                   svg_metrics={"paths": 12, "paths_raw": 40, "points": 30,
+                                "draw_mm": 1234.0, "pen_up_mm": 200.0,
+                                "estimated_seconds": 90.0,
+                                "merge_ratio": 0.3, "travel_ratio": 0.162,
+                                "svg": "svg/new.svg"})
+        for rec in (old, new):
+            (tmp / "metrics" / f"{rec['name']}.json").write_text(
+                json.dumps(rec), encoding="utf-8")
+
+        make_report.main(tmp)
+        html_text = (tmp / "report.html").read_text(encoding="utf-8")
+
+        assert "本数" in html_text and "移動比" in html_text, "列が出ていない"
+        assert "0.162" in html_text, "SVG のある行の値が出ていない"
+        assert "svg/new.svg" in html_text, "SVG へのリンクが無い"
+        # 無い側は空欄で通る。落ちないことがこのテストの主題
+        assert html_text.count("<tr class=\"ok\"") == 2, "2行出るはず"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     print("[tests] FreePencil smoke tests")
     fp_batch.install_addon()

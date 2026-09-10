@@ -1,5 +1,28 @@
 # FreePencil2 - Changelog
 
+## [2.11.2] - 2026-09-10
+### Added
+- **SVG metrics in the batch report.** Each model now also goes through the
+  SVG export, and the report gains path count, drawn distance, pen-up
+  travel, travel ratio and estimated plot time, with a link to the SVG
+  itself. Where `ink`/`components` say whether lines appeared, these say
+  whether the result is practical to plot. `--no-svg` skips it.
+
+  Deliberately **not folded into the score** - the existing formula
+  (ink 45% + fragmentation 30% + separation 25%) stays as it is, so
+  reports remain comparable with previous runs.
+
+  Measured on the 1,047,643-face model: 2481 paths, 9.4 m drawn, 2.3 m
+  travel, travel ratio 0.24, about 7 minutes, adding 4.1 s to the run.
+
+### Fixed
+- **The batch's adaptive retry silently did nothing.** `choose_adaptive_
+  overrides` returns `fpm_*` keys, but the filter applying them still read
+  `key.startswith("fp_")` - which is false for `fpm_`, since the third
+  character is `m` rather than `_`. Every retry therefore re-ran with
+  unchanged settings and produced the same result. Introduced by the
+  namespace rename in 2.8.2.
+
 ## [2.11.1] - 2026-09-09
 ### Fixed
 - **The SVG export failed outright on Blender 4.2**: `OPEN_EXR` there has
