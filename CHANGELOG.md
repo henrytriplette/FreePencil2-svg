@@ -39,6 +39,18 @@
   operators is now "Set up AOVs" and "Build compositor nodes"; "Select Node
   Type" is "Node type").
 
+- **Panel labels now fit the sidebar, and keep their translations.** Checked
+  in a real window: at default sidebar width a 38-character panel header
+  renders in full, while a 43-character checkbox label is ellipsized - "Also
+  set up the raster render (STEP2/STEP3)" came out as "Also set up the
+  r...r (STEP2/STEP3)". That toggle and the STEP2/STEP3/STEP5 headers were
+  shortened to fit.
+
+  Renaming those headers had also orphaned their `.po` entries, since
+  translations are keyed by the English string: five panel headers would have
+  rendered untranslated in Japanese. Six entries re-keyed in both locales.
+  Neither the test suite nor CI can see either class of defect.
+
 - **Both camera batch buttons sit with the camera list.** The ticks feed the
   SVG batch and the raster batch, but only the raster button was next to them;
   the SVG panel now also reports how many cameras are ticked and where to

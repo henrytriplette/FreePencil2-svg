@@ -313,7 +313,7 @@ class FP_PT_Step0(_FPSub, bpy.types.Panel):
         # 親のチェックを外している間は触れないようにして混乱を減らす
         box = layout.box()
         box.prop(scene, "fpm_auto_raster",
-                 text=t("Also set up the raster render (STEP2/STEP3)"))
+                 text=t("Also set up the raster render"))
         sub = box.column(align=True)
         sub.enabled = scene.fpm_auto_raster
         sub.label(text=t("Not used by the SVG export"), icon="INFO")
@@ -381,7 +381,7 @@ class FP_PT_Step1(_FPSub, bpy.types.Panel):
 
 
 class FP_PT_Step2(_FPSub, bpy.types.Panel):
-    bl_label = "STEP2: AOV - raster render only"
+    bl_label = "STEP2: AOV (raster only)"
     bl_idname = "FPM_PT_STEP2"
     bl_order = 2
 
@@ -403,7 +403,7 @@ class FP_PT_Step2(_FPSub, bpy.types.Panel):
 
 
 class FP_PT_Step3(_FPSub, bpy.types.Panel):
-    bl_label = "STEP3: Compositor nodes - raster render only"
+    bl_label = "STEP3: Compositor (raster only)"
     bl_idname = "FPM_PT_STEP3"
     bl_order = 3
 
@@ -479,7 +479,7 @@ class FP_PT_Step3(_FPSub, bpy.types.Panel):
 
 
 class FP_PT_Cameras(_FPSub, bpy.types.Panel):
-    bl_label = "STEP5: Cameras - SVG and raster batch"
+    bl_label = "STEP5: Cameras (batch export)"
     bl_idname = "FPM_PT_CAMERAS"
     bl_order = 5
 
