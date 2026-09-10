@@ -43,16 +43,12 @@ jobs:
           echo "tag=$tag  manifest=$man"
           test "$tag" = "$man"
 
-      - name: 開発ビルドの通し番号が残っていないことを確認する
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          set -eu
-          # scripts/stamp_dev.py が打つ番号。リリースでは空でなければならない
-          if grep -qE '^DEV_BUILD = "[^"]+"' __init__.py; then
-            echo "DEV_BUILD が残っています。scripts/install_all.py --release で外してください" >&2
-            exit 1
-          fi
-          echo "OK"
+      # 「開発ビルドの通し番号(DEV_BUILD)が残っていないこと」を見る検査が
+      # ここにあったが、外した。DEV_BUILD を書く仕組みがこのリポジトリに
+      # 無く(参照していた scripts/stamp_dev.py も、案内していた
+      # install_all.py --release も存在しない)、絶対に成立しない検査が
+      # 存在しないスクリプトを案内していたため。
+      # 開発ビルドに印を付ける仕組みを入れるなら、その時に検査も戻すこと。
 
   build:
     runs-on: ubuntu-latest
