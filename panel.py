@@ -16,6 +16,7 @@ from .aov_node import LINK_MAKE_FP_OT_AOV_NODE
 from .paint_vertex_color import LINK_MAKE_FP_OT_VCOLOR
 from .half_fill import LINK_MAKE_FP_OT_HALF_FILL
 from .render_cameras import FP_OT_RENDER_CAMERAS
+from .reset_scene import FP_OT_RESET
 from .auto_setup import FP_OT_AUTO_SETUP
 from .svg_export import (FP_OT_EXPORT_SVG, FP_OT_EXPORT_SVG_CAMERAS,
                          FPM_OT_EXPORT_SVG_FRAMES,
@@ -34,14 +35,41 @@ class FP_PT_Line(bpy.types.Panel):
     bl_category = "FreePencil SVG"
 
     def draw(self, context):
+        t = bpy.app.translations.pgettext
+        layout = self.layout
+
         # 4.2 は限定対応。レンダリングは動くがライブプレビューが出ないので、
         # 黙っていると「壊れている」と受け取られる。最初に伝える。
         if not compat.HAS_AOV_IN_VIEWPORT_COMPOSITOR:
-            t = bpy.app.translations.pgettext
-            box = self.layout.box()
+            box = layout.box()
             col = box.column(align=True)
             col.label(text=t("Limited support on this Blender"), icon="INFO")
             col.label(text=t("Render with F12. Live preview needs 4.3+."))
+
+        # 今どこに居るのか。番号だけでは「次に何を押すのか」が分からない、
+        # という声があったので、SVG を出すのに要るものを上から並べる
+        box = layout.box()
+        col = box.column(align=True)
+        _status_row(col, context.scene.camera is not None,
+                    t("Camera"),
+                    t("ready") if context.scene.camera is not None
+                    else t("none in scene"))
+        painted = _painted_mesh_exists(context)
+        _status_row(col, painted, t("Colour separation"),
+                    t("painted") if painted else t("not yet"))
+        if svg_export.preview_enabled():
+            fresh = not svg_export.preview_stale(context)
+            _status_row(col, fresh, t("Preview"),
+                        t("current") if fresh else t("out of date"))
+
+        # 次の一手。押せるものはボタンで出す(文言だけだと探しに行く手間)
+        if context.scene.camera is None:
+            col.label(text=t("Add a camera to the scene"), icon="INFO")
+        elif not painted:
+            col.operator(FP_OT_AUTO_SETUP.bl_idname,
+                         text=t("Auto setup (paint for SVG)"), icon="AUTO")
+        else:
+            col.label(text=t("Ready to export SVG"), icon="CHECKMARK")
 
 
 class _FPSub:
@@ -60,6 +88,13 @@ class _FPSub:
     # DEFAULT_CLOSED が効くのは初回表示時だけで、以降はユーザーの
     # 開閉状態が .blend 側に保存される。
     bl_options = {"DEFAULT_CLOSED"}
+
+
+def _status_row(col, ok: bool, label: str, value: str) -> None:
+    """状態を1行。チェックか警告のアイコンで、目で拾えるようにする。"""
+    row = col.row(align=True)
+    row.label(text=f"{label}: {value}",
+              icon="CHECKMARK" if ok else "ERROR")
 
 
 def _painted_mesh_exists(context, cap: int = 200) -> bool:
@@ -84,9 +119,9 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
     分けている(プロパティが増えて縦に長くなりすぎたため)。
     """
 
-    bl_label = "SVG Export (pen plotter)"
+    bl_label = "SVG export (pen plotter) - main output"
     bl_idname = "FPM_PT_SVG"
-    bl_order = -1
+    bl_order = -3
     bl_options = set()      # 主機能なので既定で開く
 
     def draw(self, context):
@@ -94,10 +129,15 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
+        # 前提が揃っていないときは、文言ではなく押せるものを出す。
+        # 「STEP0 を先に」と書いてあっても、探しに行くのは手間
         if scene.camera is None:
             layout.label(text=t("Set an active camera first"), icon="ERROR")
         elif not _painted_mesh_exists(context):
-            layout.label(text=t("Run STEP0 or STEP1 first"), icon="INFO")
+            box = layout.box()
+            box.label(text=t("The model has to be painted first"), icon="INFO")
+            box.operator(FP_OT_AUTO_SETUP.bl_idname,
+                         text=t("Auto setup (paint for SVG)"), icon="AUTO")
 
         layout.operator_menu_enum(FP_OT_SVG_PRESET.bl_idname, "preset",
                                   text=t("Preset"), icon="PRESET")
@@ -109,7 +149,12 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
             row.operator(FP_OT_SVG_PREVIEW_CLEAR.bl_idname,
                          text="", icon="X")
             info = svg_export.preview_info()
-            if info:
+            # カメラやモデルを動かした後の線は、隠線処理が当時のままで
+            # 裏側の線まで残る。黙っていると「二重に出る」と受け取られる
+            if svg_export.preview_stale(context):
+                layout.label(text=t("Preview is out of date - refresh"),
+                             icon="ERROR")
+            elif info:
                 layout.label(text=f"{t('Preview')}: {info}", icon="INFO")
 
         col = layout.column(align=True)
@@ -161,6 +206,15 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         row.enabled = bool(bpy.data.filepath)
         row.operator(FP_OT_EXPORT_SVG_CAMERAS.bl_idname,
                      text=t("Export checked cameras"), icon="RENDER_RESULT")
+        # チェックを付ける場所が別のパネルなので、何台選ばれているかだけ
+        # ここに出す(押す前に分かる)
+        cams = [o for o in scene.objects if o.type == "CAMERA"]
+        if cams:
+            ticked = sum(1 for o in cams
+                         if getattr(o, "fpm_cam_render", True))
+            layout.label(
+                text=f"{t('Cameras ticked')}: {ticked}/{len(cams)}"
+                     f" ({t('set them in STEP5')})", icon="CAMERA_DATA")
         row = layout.row()
         row.enabled = bool(bpy.data.filepath)
         row.operator(FPM_OT_EXPORT_SVG_FRAMES.bl_idname,
@@ -180,7 +234,7 @@ class FP_PT_SvgSources(_FPSub, bpy.types.Panel):
     bl_label = "Line sources"
     bl_idname = "FPM_PT_SVG_SOURCES"
     bl_parent_id = "FPM_PT_SVG"
-    bl_order = 0
+    bl_order = -2
 
     def draw(self, context):
         t = bpy.app.translations.pgettext
@@ -200,7 +254,7 @@ class FP_PT_SvgAdvanced(_FPSub, bpy.types.Panel):
     bl_label = "Advanced"
     bl_idname = "FPM_PT_SVG_ADVANCED"
     bl_parent_id = "FPM_PT_SVG"
-    bl_order = 1
+    bl_order = -1
 
     def draw(self, context):
         t = bpy.app.translations.pgettext
@@ -235,7 +289,7 @@ class FP_PT_SvgAdvanced(_FPSub, bpy.types.Panel):
 
 
 class FP_PT_Step0(_FPSub, bpy.types.Panel):
-    bl_label = "STEP0: Full Auto"
+    bl_label = "STEP0: Full Auto - start here"
     bl_idname = "FPM_PT_STEP0"
     bl_order = 0
     bl_options = set()  # ここだけ既定で開く
@@ -246,22 +300,36 @@ class FP_PT_Step0(_FPSub, bpy.types.Panel):
         scene = context.scene
         col = layout.column(align=True)
         col.label(text=t("Recommended settings for this scene"), icon="INFO")
+        # 塗り分けの設定。SVG 書き出しに効くのはこちらだけ
         col = layout.column(align=True)
         col.prop(scene, "fpm_auto_sharp", text=t("Auto edge angle"))
         col.prop(scene, "fpm_auto_seam", text=t("Seam/material boundaries"))
         col.prop(scene, "fpm_auto_merge", text=t("Merge small islands"))
         col.prop(scene, "fpm_auto_part_tint", text=t("Part tint"))
-        col.prop(scene, "fpm_auto_bone", text=t("Bone AOV by rig detection"))
-        col.prop(scene, "fpm_auto_aa", text=t("Anti-aliasing"))
-        col.prop(scene, "fpm_auto_supersample",
-                 text=t("2x supersampling (thin lines)"))
+        col.prop(scene, "fpm_auto_bone", text=t("Bone colours by rig detection"))
         col.prop(scene, "fpm_auto_hashed", text=t("BLEND to HASHED (keep glass)"))
-        col.prop(scene, "fpm_auto_detect_aov", text=t("Auto AOVs from scene"))
-        col.prop(scene, "fpm_auto_white_preview",
+
+        # ラスタ(F12)で出したい人だけの設定。SVG には要らないので、
+        # 親のチェックを外している間は触れないようにして混乱を減らす
+        box = layout.box()
+        box.prop(scene, "fpm_auto_raster",
+                 text=t("Also set up the raster render (STEP2/STEP3)"))
+        sub = box.column(align=True)
+        sub.enabled = scene.fpm_auto_raster
+        sub.label(text=t("Not used by the SVG export"), icon="INFO")
+        sub.prop(scene, "fpm_auto_aa", text=t("Anti-aliasing"))
+        sub.prop(scene, "fpm_auto_supersample",
+                 text=t("2x supersampling (thin lines)"))
+        sub.prop(scene, "fpm_auto_detect_aov", text=t("Auto AOVs from scene"))
+        sub.prop(scene, "fpm_auto_white_preview",
                  text=t("White material preview"))
-        col.prop(scene, "fpm_auto_file_output", text=t("Enable File Output"))
-        layout.operator(FP_OT_AUTO_SETUP.bl_idname,
-                        text=t("Auto setup (STEP1-3)"), icon="AUTO")
+        sub.prop(scene, "fpm_auto_file_output", text=t("Enable File Output"))
+
+        layout.operator(
+            FP_OT_AUTO_SETUP.bl_idname,
+            text=(t("Auto setup (paint + raster)") if scene.fpm_auto_raster
+                  else t("Auto setup (paint for SVG)")),
+            icon="AUTO")
 
 
 class FP_PT_Step1(_FPSub, bpy.types.Panel):
@@ -313,7 +381,7 @@ class FP_PT_Step1(_FPSub, bpy.types.Panel):
 
 
 class FP_PT_Step2(_FPSub, bpy.types.Panel):
-    bl_label = "STEP2: AOV"
+    bl_label = "STEP2: AOV - raster render only"
     bl_idname = "FPM_PT_STEP2"
     bl_order = 2
 
@@ -331,11 +399,11 @@ class FP_PT_Step2(_FPSub, bpy.types.Panel):
                  text=t("AOV Line Color(line darkness)"))
         col.prop(scene, "fpm_mat_color", text=t("AOV Material Boundary Color"))
         layout.operator(LINK_MAKE_FP_OT_AOV_NODE.bl_idname,
-                        text=t("Generate AOV Node"), icon="NODETREE")
+                        text=t("Set up AOVs"), icon="NODETREE")
 
 
 class FP_PT_Step3(_FPSub, bpy.types.Panel):
-    bl_label = "STEP3: Node Generation"
+    bl_label = "STEP3: Compositor nodes - raster render only"
     bl_idname = "FPM_PT_STEP3"
     bl_order = 3
 
@@ -345,7 +413,7 @@ class FP_PT_Step3(_FPSub, bpy.types.Panel):
         scene = context.scene
 
         col = layout.column(align=True)
-        col.prop(scene, "fpm_node_type", text=t("Select Node Type"))
+        col.prop(scene, "fpm_node_type", text=t("Node type"))
         # 4.2 のビューポートコンポジタは AOV を評価しないので、ONにしても
         # プレビューは出ない。触れるままにすると誤解を招くため無効化する
         row = col.row(align=True)
@@ -407,11 +475,11 @@ class FP_PT_Step3(_FPSub, bpy.types.Panel):
             col.label(text=t("No pass selected"), icon="ERROR")
 
         layout.operator(LINK_MAKE_FP_OT_NODE.bl_idname,
-                        text=t("Generate Sample Node"), icon="NODETREE")
+                        text=t("Build compositor nodes"), icon="NODETREE")
 
 
 class FP_PT_Cameras(_FPSub, bpy.types.Panel):
-    bl_label = "STEP5: Camera Batch Render"
+    bl_label = "STEP5: Cameras - SVG and raster batch"
     bl_idname = "FPM_PT_CAMERAS"
     bl_order = 5
 
@@ -425,6 +493,8 @@ class FP_PT_Cameras(_FPSub, bpy.types.Panel):
         if not cams:
             layout.label(text=t("No cameras in scene"), icon="INFO")
             return
+        layout.label(text=t("These ticks feed both batch exports"),
+                     icon="INFO")
         col = layout.column(align=True)
         for cam in cams:
             row = col.row(align=True)
@@ -432,8 +502,17 @@ class FP_PT_Cameras(_FPSub, bpy.types.Panel):
             icon = ("OUTLINER_OB_CAMERA" if cam == scene.camera
                     else "CAMERA_DATA")
             row.label(text=cam.name, icon=icon)
+
+        # 主目的の SVG が先。ラスタは下に置く
+        row = layout.row()
+        row.enabled = bool(bpy.data.filepath)
+        row.operator(FP_OT_EXPORT_SVG_CAMERAS.bl_idname,
+                     text=t("Export checked cameras"), icon="RENDER_RESULT")
         layout.operator(FP_OT_RENDER_CAMERAS.bl_idname,
                         text=t("Render checked cameras"), icon="RENDER_STILL")
+        if not bpy.data.filepath:
+            layout.label(text=t("Save the .blend to batch cameras"),
+                         icon="INFO")
 
 
 class FP_PT_Step4(_FPSub, bpy.types.Panel):
@@ -463,6 +542,24 @@ class FP_PT_Step4(_FPSub, bpy.types.Panel):
         row.prop(scene, "fpm_half_color", text="")
         row.operator(LINK_MAKE_FP_OT_HALF_FILL.bl_idname,
                      text=t("Half Fill"), icon="BRUSH_DATA")
+
+
+class FP_PT_Reset(_FPSub, bpy.types.Panel):
+    """後始末。試したあとで元に戻したい人のための出口。"""
+
+    bl_label = "Reset"
+    bl_idname = "FPM_PT_RESET"
+    bl_order = 6
+
+    def draw(self, context):
+        t = bpy.app.translations.pgettext
+        layout = self.layout
+        col = layout.column(align=True)
+        col.label(text=t("Removes the nodes, AOVs and vertex colours"),
+                  icon="INFO")
+        col.label(text=t("STEP1 has to be run again afterwards"))
+        layout.operator(FP_OT_RESET.bl_idname, text=t("Reset scene"),
+                        icon="TRASH")
 
 
 class FPM_PT_CompositorOptions(bpy.types.Panel):

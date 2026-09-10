@@ -782,7 +782,11 @@ def svg_metrics(out_dir: Path, args, tag: str) -> dict:
     path = svg_dir / (f"{args.name}_seed{args.seed}_{args.preset}"
                       f"_{args.material}{tag}.svg")
 
-    opts = svg_export.SvgOptions(depth_res=args.res, layers="SOURCE")
+    # fit は明示する。アドオンの既定が DRAWING から CAMERA に変わった
+    # (2.11.3)が、ここを追随させると描画距離や travel が変わり、過去の
+    # レポートと突き合わせられなくなる。計測条件は据え置く
+    opts = svg_export.SvgOptions(depth_res=args.res, layers="SOURCE",
+                                 fit="DRAWING")
     stats = svg_export.export_svg(bpy.context, str(path), opts)
 
     raw = max(1, stats.get("paths_raw", 1))

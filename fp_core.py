@@ -6,6 +6,8 @@ touch context.screen, windows, or popups. Anything UI-related stays in
 the operators.
 """
 
+import json
+
 import bpy
 
 from . import compat
@@ -445,6 +447,9 @@ def setup_aov(scene: bpy.types.Scene,
     押しても何も起きていないように見える、という声があったので、
     何をしたのかを辞書で返す(UI 側がそのまま出せる形)。
     """
+    # 書き換える前の見た目を控える(リセット用)。ここが最初に触る場所
+    capture_state(scene, view_layer)
+
     # 「無ければ作る」だと古いグループが残っている .blend で永久に
     # 更新されない。版が古ければ作り直して参照を付け替える
     aov_group = utils_nodegroup.ensure_node_group_updated(AOV_GROUP_NAME)
@@ -515,6 +520,9 @@ def setup_compositor(scene: bpy.types.Scene,
 
     Returns the node group name that was wired in.
     """
+    # STEP2 を飛ばして STEP3 だけ走らせる人もいるので、ここでも控える
+    capture_state(scene, view_layer)
+
     node_ver_name = f"{NODE_GROUP_PREFIX}{scene.fpm_node_type}"
 
     utils_nodegroup.ensure_node_group_updated(node_ver_name)
@@ -677,3 +685,161 @@ def setup_compositor(scene: bpy.types.Scene,
         "file_output_dir": compat.file_output_get_dir(fo) if fo else "",
         "relief": getattr(scene, "fpm_far_relief", 0.0),
     }
+
+
+# --------------------------------------------------- 元に戻すための控え
+# STEP2/STEP3 はシーンの見た目そのものを書き換える(背景の透過・ビュー
+# 変換・レンダーパス)。試したあとで元に戻したい、という要望があるので、
+# 最初に書き換える前の値を控えておき、リセットのときに書き戻す。
+#
+# 控えはシーンのカスタムプロパティに JSON で持つ。.blend に残るので、
+# 開き直したあとでもリセットできる。
+RESTORE_STATE_PROP = "fpm_restore_state"
+
+# STEP2 が足すビューレイヤーの AOV スロット
+AOV_NAMES = ("mecha_color", "gen_color", "mask_color", "line_color",
+             "mat_color", "bone_color")
+
+# STEP1/STEP4 が塗る頂点カラー(vertex_color.VCOL_LAYER_* と同じ名前)
+VCOL_LAYERS = ("mecha_color", "gen_color", "mask_color", "line_color",
+               "bone_color")
+
+# 使われなくなったら片付けるマテリアル
+# (vertex_color.DEFAULT_MATERIAL_NAME / WHITE_PREVIEW_MAT)
+_OWN_MATERIALS = (WHITE_PREVIEW_MAT, "FreePencil_Material")
+
+
+def load_state(scene) -> dict:
+    """控えを読む。壊れていたら「無い」として扱う。"""
+    raw = scene.get(RESTORE_STATE_PROP)
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+
+
+def save_state(scene, state: dict) -> None:
+    scene[RESTORE_STATE_PROP] = json.dumps(state)
+
+
+def clear_state(scene) -> None:
+    if RESTORE_STATE_PROP in scene:
+        del scene[RESTORE_STATE_PROP]
+
+
+def capture_state(scene, view_layer) -> bool:
+    """書き換える前の値を控える。最初の一回だけ効く。
+
+    2回目以降も控え直すと、こちらが書き換えた後の値を「元の値」として
+    覚えてしまい、戻す先が無くなる。
+    """
+    state = load_state(scene)
+    if "scene" in state:
+        return False
+    # use_pass_* はビルドによって顔ぶれが違うので、名前で拾って丸ごと控える
+    passes = {k: getattr(view_layer, k) for k in dir(view_layer)
+              if k.startswith("use_pass_")
+              and isinstance(getattr(view_layer, k, None), bool)}
+    state["scene"] = {
+        "film_transparent": scene.render.film_transparent,
+        "use_compositing": scene.render.use_compositing,
+        "view_transform": scene.view_settings.view_transform,
+        "use_nodes": bool(getattr(scene, "use_nodes", False)),
+        "passes": passes,
+    }
+    save_state(scene, state)
+    return True
+
+
+def restore_state(scene, view_layer) -> bool:
+    """控えた値を書き戻す。控えが無ければ何も触らない。"""
+    saved = load_state(scene).get("scene")
+    if not saved:
+        return False
+    scene.render.film_transparent = saved["film_transparent"]
+    scene.render.use_compositing = saved["use_compositing"]
+    try:
+        scene.view_settings.view_transform = saved["view_transform"]
+    except TypeError:
+        pass        # そのビルドに無い変換名。色管理だけ諦める
+    if hasattr(scene, "use_nodes"):
+        scene.use_nodes = saved["use_nodes"]
+    for name, value in saved.get("passes", {}).items():
+        try:
+            setattr(view_layer, name, value)
+        except AttributeError:
+            pass    # 版が変わって消えたパス
+    return True
+
+
+def teardown(scene, view_layer, remove_paint: bool = True) -> dict:
+    """FreePencil がシーンに書いたものを取り除く。
+
+    消すのは「このアドオンが足したもの」だけ。コンポジタは STEP3 が付ける
+    ラベル(ノードグループ名)と白プレビューの印で見分けるので、利用者が
+    自分で足したノードは残る。
+    """
+    info = {"materials": 0, "aovs": 0, "nodes": 0, "groups": 0,
+            "vcols": 0, "restored": False}
+
+    # 白プレビューを先に戻す。コンポジタのノードを消した後だと、差し込んだ
+    # Mix を辿れず、過去方式のマテリアルのバックアップが残る
+    set_white_preview(scene, False)
+
+    for mat in bpy.data.materials:
+        nt = mat.node_tree
+        if not mat.use_nodes or nt is None:
+            continue
+        for nd in list(nt.nodes):
+            grp = getattr(nd, "node_tree", None)
+            if nd.type == "GROUP" and grp is not None                     and "FreePencil" in grp.name:
+                nt.nodes.remove(nd)
+                info["materials"] += 1
+
+    for name in AOV_NAMES:
+        aov = next((a for a in view_layer.aovs if a.name == name), None)
+        if aov is not None:
+            view_layer.aovs.remove(aov)
+            info["aovs"] += 1
+
+    tree = compat.get_compositor_tree(scene)
+    if tree is not None:
+        for nd in list(tree.nodes):
+            grp = getattr(nd, "node_tree", None)
+            if (nd.label.startswith("FreePencil")
+                    or nd.label == WHITE_MIX_LABEL
+                    or (grp is not None
+                        and grp.name.startswith(NODE_GROUP_PREFIX))):
+                tree.nodes.remove(nd)
+                info["nodes"] += 1
+        # 5.x のシーンコンポジタはノードグループ。こちらで建てたものが
+        # 空になったら外す(外さないと users が残って捨てられない)
+        if compat.IS_5_PLUS and not tree.nodes                 and tree.name.startswith("FreePencil"):
+            scene.compositing_node_group = None
+
+    for ng in list(bpy.data.node_groups):
+        if ng.users == 0 and (ng.name == AOV_GROUP_NAME
+                              or ng.name == _LEGACY_SHADER_MIX_GROUP
+                              or ng.name.startswith(NODE_GROUP_PREFIX)
+                              or ng.name.startswith("FreePencil")):
+            bpy.data.node_groups.remove(ng)
+            info["groups"] += 1
+
+    for mat in list(bpy.data.materials):
+        if mat.users == 0 and mat.name in _OWN_MATERIALS:
+            bpy.data.materials.remove(mat)
+
+    if remove_paint:
+        meshes = {o.data.name: o.data for o in scene.objects
+                  if o.type == "MESH" and o.data is not None}
+        for mesh in meshes.values():
+            for name in VCOL_LAYERS:
+                attr = mesh.color_attributes.get(name)
+                if attr is not None:
+                    mesh.color_attributes.remove(attr)
+                    info["vcols"] += 1
+
+    info["restored"] = restore_state(scene, view_layer)
+    return info

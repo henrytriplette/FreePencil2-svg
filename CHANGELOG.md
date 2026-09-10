@@ -1,5 +1,79 @@
 # FreePencil2 - Changelog
 
+## [2.11.3] - 2026-09-10
+### Added
+- **Reset panel.** One button that takes the add-on back out of the scene:
+  the AOV group is removed from every material, the compositor nodes STEP3
+  built are deleted, the AOV slots are dropped, the vertex colours are
+  removed, and the render and viewport settings are put back to what they
+  were before STEP2 first ran.
+
+  The "before" values are captured the first time `setup_aov` or
+  `setup_compositor` writes to the scene, and stored as JSON in a scene
+  custom property, so they survive saving and reopening the .blend. Only the
+  first capture counts - re-capturing would record the add-on's own writes
+  as the original state. Viewport shading lives in `reset_scene.py` rather
+  than `fp_core.py`, which must stay headless-safe and not touch
+  `context.screen`.
+
+  Compositor nodes the user added are left alone: only nodes carrying
+  FreePencil's own labels or node groups are removed. Material `pass_index`
+  values written by STEP2's material-ID counting are not restored.
+
+  The vertex colours go too, so STEP1 has to be re-run afterwards; the
+  operator confirms first and registers UNDO.
+
+### Changed
+- **The SVG page fit now defaults to Camera frame** instead of Drawing
+  bounds, so what is composed in the 3D view is what lands on the paper.
+  Drawing bounds stays available for filling the sheet, and keeps its
+  documented advantage - the merge tolerance in mm bites at the scale of
+  the drawing rather than at whatever size the subject happens to be.
+
+  The batch harness (`dev/batch/fp_batch.py`) pins `fit="DRAWING"`
+  explicitly rather than following the new default, so its SVG metrics stay
+  comparable with reports from previous runs.
+
+### Fixed
+- **"Keep hidden lines" also dropped the camera crop.** The option is
+  documented as "Skip hidden-line removal (for diagnosis)", but
+  `visible_spans` returned early with every edge marked visible, which
+  skipped the `inside` frame test as well as the depth test. Nothing
+  downstream re-applies it - `visible_polylines` just projects what it is
+  handed, and a non-tiled export never clips to the page - so geometry
+  outside the camera frame ended up in the SVG. With the default
+  `fit=DRAWING` that off-screen geometry stretched the bounding box and
+  shrank the actual subject to a fraction of the page, which read as
+  "the preview does not match the export".
+
+  Now only the occlusion test is skipped; the frame crop stays. Regression
+  test: a cube placed 30 m to the camera's side contributes no edges with
+  `keep_hidden=True`, while lines inside the frame survive.
+
+- **The viewport preview never admitted it was out of date.** The overlay is
+  a snapshot: `refresh_preview` stores world-space segments whose visibility
+  was decided against a depth render from the camera as it stood at that
+  moment, and nothing invalidated it - the add-on registers no
+  `bpy.app.handlers` at all. Move the camera and the segments stay glued to
+  the model, so the positions still look right, but the hidden-line result
+  belongs to the old viewpoint; since the overlay draws with
+  `depth_test_set('NONE')`, every stale back-face line paints straight
+  through the model. That is the "ghost lines" doubling.
+
+  The preview now stamps what it was computed from - camera transform and
+  lens, frame, render resolution, every mesh object's transform, and the
+  settings that actually change the 3D lines - and compares it on each draw.
+  A stale overlay is drawn in light grey instead of near-black, and the
+  panel replaces the segment count with "Preview is out of date - refresh".
+
+  Deliberately **not** auto-refreshed: a refresh renders a depth pass and
+  re-extracts every line, so hanging it off a depsgraph handler would stall
+  the viewport on every camera nudge.
+
+  Paper-side settings (page, margin, pen, tiling, jitter, fit) do not mark
+  it stale, because they do not change the lines drawn in the 3D view.
+  Mesh edits and repainting are still not detected - press refresh.
+
 ## [2.11.2] - 2026-09-10
 ### Added
 - **SVG metrics in the batch report.** Each model now also goes through the

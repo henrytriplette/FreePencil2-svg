@@ -1,7 +1,9 @@
 """STEP0: One-button full-auto setup.
 
-シーンを解析しておすすめ設定を適用し、STEP1(頂点カラー)→STEP2(AOV)→
-STEP3(PROノード)まで一括実行する。判定内容:
+シーンを解析しておすすめ設定を適用し、STEP1(頂点カラー)を実行する。
+STEP2(AOV)/STEP3(PROノード)は fpm_auto_raster が入っているときだけ。
+主目的の SVG 書き出しはコンポジタを通らないため、既定では建てない。
+判定内容:
   - 対象: 選択メッシュ、無ければレンダリング対象の全メッシュ
   - リグ(Armature)があれば bone AOV を自動ON
   - 島分割は自動しきい値+シーム境界+小島マージ、パーツ・トーン分けON
@@ -45,8 +47,10 @@ class FP_OT_AUTO_SETUP(vertex_color.FPProgressModalMixin, bpy.types.Operator):
     bl_idname = "fpm.auto_setup"
     bl_label = "Auto Setup"
     bl_description = (
-        "Analyze the scene, apply recommended settings and run "
-        "STEP1 (vertex colors), STEP2 (AOV) and STEP3 (PRO node) at once"
+        "Analyze the scene, apply recommended settings and paint the "
+        "colour separation (STEP1) - everything the SVG export needs. "
+        "Tick 'Also set up the raster render' to build the AOV and "
+        "compositor nodes (STEP2/STEP3) as well"
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -130,19 +134,27 @@ class FP_OT_AUTO_SETUP(vertex_color.FPProgressModalMixin, bpy.types.Operator):
                 "detected": detected, "film_transparent": film_transparent}
 
     def _finish(self, context, info):
-        """STEP1 完了後: STEP2(AOV)/STEP3(PROノード)と後始末。"""
+        """STEP1 完了後: (任意で)STEP2/STEP3 と後始末。"""
         scene = context.scene
 
-        bpy.ops.fpm4.link_button()
-        bpy.ops.fpm2.link_button()
+        # 主目的の SVG 書き出しはコンポジタを通らない(頂点カラーを直接
+        # 読む)。STEP2/STEP3 を毎回建てると、要らないノードが建ち、
+        # ビューポートがレンダー表示と白マテリアルに切り替わって
+        # 「何かがおかしくなった」と受け取られる。ラスタで出したい人だけ
+        # チェックを入れる
+        raster = scene.fpm_auto_raster
+        if raster:
+            bpy.ops.fpm4.link_button()
+            bpy.ops.fpm2.link_button()
 
-        scene.render.film_transparent = info["film_transparent"]
+            scene.render.film_transparent = info["film_transparent"]
 
-        # 白マテリアルでプレビュー。線画がすぐ見える状態にして終わる。
-        # コンポジタ切替方式なのでマテリアル自体は触らない。必ず STEP3 で
-        # コンポジタが建った後に立てること(先に立てても差し込む先が無い)
-        if scene.fpm_auto_white_preview and not scene.fpm_white_preview:
-            scene.fpm_white_preview = True
+            # 白マテリアルでプレビュー。線画がすぐ見える状態にして終わる。
+            # コンポジタ切替方式なのでマテリアル自体は触らない。必ず STEP3
+            # でコンポジタが建った後に立てること(先に立てても差し込む先が
+            # 無い)
+            if scene.fpm_auto_white_preview and not scene.fpm_white_preview:
+                scene.fpm_white_preview = True
 
         # BLEND は AOV が書かれない → 本物のガラス以外は HASHED へ
         hashed = 0
@@ -156,14 +168,19 @@ class FP_OT_AUTO_SETUP(vertex_color.FPProgressModalMixin, bpy.types.Operator):
                 hashed += 1
 
         msg = (f"meshes={len(info['targets'])}, "
+               f"raster={'ON' if raster else 'OFF'}, "
                f"bone_aov={'ON' if info['has_rig'] else 'OFF'}, hashed={hashed}"
                + (f", detected_aov={'+'.join(info['detected'])}"
                   if info["detected"] else ""))
         print(f"[freepencil.auto_setup] {msg}")
         self.report({'INFO'}, f"Auto setup done ({msg})")
-        # ステータスバーだけだと見落とされる。STEP1〜3 を一気に走らせる
-        # ボタンなので、終わったことをはっきり出す
-        utils.show_message_box(f"STEP1-3 done. {msg}",
+        # ステータスバーだけだと見落とされる。時間のかかるボタンなので、
+        # 終わったことと「次に何をするか」をはっきり出す
+        t = bpy.app.translations.pgettext
+        done = (t("STEP1-3 done. Ready to render (F12) or export SVG.")
+                if raster else
+                t("Painted. Ready to export SVG."))
+        utils.show_message_box(f"{done} {msg}",
                                title="FreePencil STEP0", icon='CHECKMARK')
         return {'FINISHED'}
 

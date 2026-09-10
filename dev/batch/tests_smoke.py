@@ -716,6 +716,9 @@ def t21():
     # HASHED化、film_transparent の維持、STEP1-3 の一括実行を検証。
     bpy.ops.wm.read_homefile(use_empty=True)
     scene = bpy.context.scene
+    # STEP2/STEP3 は既定では走らない(SVG には要らない)。ここはラスタまで
+    # 建つことを見るテストなので明示的に入れる
+    scene.fpm_auto_raster = True
 
     # リグ付きメッシュ
     arm = bpy.data.armatures.new("FP_Arm")
@@ -745,6 +748,7 @@ def t21():
     for o in bpy.context.selected_objects:
         o.select_set(False)  # 無選択 → 表示メッシュ自動選択の経路
 
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup()
 
     assert "mecha_color" in obj.data.color_attributes.keys() or \
@@ -771,6 +775,7 @@ def t21():
     scene.fpm_auto_hashed = False
     scene.fpm_auto_bone = False
     scene.fpm_bone_color = False
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup()
     assert mat2.blend_method == "BLEND", \
         "hashed conversion must be skipped when toggled off"
@@ -789,10 +794,12 @@ def t21():
     scene.fpm_mat_count = True
     scene.fpm_mat_color = False
     scene.fpm_auto_detect_aov = False
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup()
     assert scene.fpm_mask_color is False, "detection must be skippable"
     scene.fpm_auto_detect_aov = True
     scene.fpm_line_color = True  # 手動ONだが line_color は未塗り → 自動がOFFへ
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup()
     assert scene.fpm_mask_color is True, "painted mask_color must enable its AOV"
     assert scene.fpm_mat_color is True, "mat AOV must follow material ID"
@@ -1093,9 +1100,50 @@ def t27():
     o = bpy.context.active_object
     o.select_set(True)
     bpy.context.view_layer.objects.active = o
+    bpy.context.scene.fpm_auto_raster = True
     res = bpy.ops.fpm.auto_setup("INVOKE_DEFAULT")
     assert res == {"FINISHED"}, res
     assert fp_batch.comp_tree() is not None, "STEP0 must still reach STEP3"
+
+
+@test("STEP0 stops at the paint by default - SVG needs no compositor")
+def t28b():
+    # 主目的は SVG。コンポジタを毎回建てるとビューポートがレンダー表示と
+    # 白マテリアルに変わり、「何かがおかしくなった」と受け取られる。
+    from freepencil2 import svg_export
+
+    bpy.ops.wm.read_homefile(use_empty=True)
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2)
+    obj = bpy.context.active_object
+    obj.data.materials.append(bpy.data.materials.new("FP_T28B_Mat"))
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+    scene = bpy.context.scene
+    scene.fpm_use_random_seed = False
+    scene.fpm_color_seed = 1234
+    assert scene.fpm_auto_raster is False, "ラスタ設定は既定で切ってあること"
+
+    bpy.ops.fpm.auto_setup()
+
+    # 塗り分けは済んでいる = SVG が出せる
+    assert obj.data.color_attributes.get("mecha_color") is not None, (
+        "STEP1 の塗り分けが走っていない")
+    # ラスタ側には触っていない
+    assert fp_batch.comp_tree(scene) is None or not [
+        n for n in fp_batch.comp_tree(scene).nodes
+        if n.label.startswith("FreePencil")], "コンポジタが建っている"
+    assert not [a for a in bpy.context.view_layer.aovs
+                if a.name == "mecha_color"], "AOV が足されている"
+    assert scene.fpm_white_preview is False, "白プレビューが立っている"
+    assert not scene.render.film_transparent, "背景の透過が変えられている"
+
+    # そのまま SVG が書き出せること(コンポジタ抜きで完結する)
+    fp_batch.setup_camera_and_light()
+    scene.render.resolution_x, scene.render.resolution_y = 400, 300
+    segs, n = svg_export.compute_preview(
+        bpy.context, svg_export.SvgOptions(depth_res=400))
+    assert n > 0, "塗っただけでは線が出ない"
 
 
 @test("STEP0 leaves the white preview on so line art is visible at once")
@@ -1115,8 +1163,10 @@ def t28():
     scene.fpm_use_random_seed = False
     scene.fpm_color_seed = 1234
     scene.fpm_enable_compositor_view = False
+    scene.fpm_auto_raster = True      # 白プレビューはコンポジタが要る
     assert scene.fpm_auto_white_preview is True, "must default to on"
 
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup()
 
     assert scene.fpm_white_preview is True, "STEP0 must leave white preview on"
@@ -1141,6 +1191,7 @@ def t28():
     scene.fpm_color_seed = 1234
     scene.fpm_enable_compositor_view = False
     scene.fpm_auto_white_preview = False
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup()
     assert scene.fpm_white_preview is False, \
         "toggle off must leave the white preview alone"
@@ -1387,6 +1438,7 @@ def t35():
     scene = bpy.context.scene
     scene.fpm_node_type = "pro"
     scene.fpm_enable_compositor_view = False
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     def rect(n):
@@ -1449,6 +1501,7 @@ def t36():
         scene.fpm_auto_detect_aov = False
         scene.fpm_mask_color = True
         scene.fpm_line_color = True
+        bpy.context.scene.fpm_auto_raster = True
         bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
         if channel:
             attr = obj.data.color_attributes[channel]
@@ -1499,6 +1552,7 @@ def t37():
     scene = bpy.context.scene
     scene.fpm_enable_compositor_view = False
     scene.fpm_auto_detect_aov = False
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     group = next(g for g in bpy.data.node_groups
@@ -1559,6 +1613,7 @@ def t38():
     scene = bpy.context.scene
     scene.fpm_enable_compositor_view = False
     scene.fpm_auto_detect_aov = False
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     tree = compat.get_compositor_tree(scene)
@@ -1604,6 +1659,7 @@ def t39():
     scene.fpm_auto_detect_aov = False
     scene.fpm_file_output = True
     scene.fpm_supersample = True          # ← 200% + 0.5 縮小
+    bpy.context.scene.fpm_auto_raster = True
     bpy.ops.fpm.auto_setup("EXEC_DEFAULT")
 
     scene.render.resolution_x = 64
@@ -1808,6 +1864,190 @@ def t46():
         assert "fill:none" in head or 'fill="none"' in head, "塗りが付いている"
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: keep_hidden skips occlusion only, not the camera frame")
+def t46b():
+    from mathutils import Vector
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    scene = bpy.context.scene
+    cam = scene.camera
+    # カメラの真横に箱を置く。画角の外なので、隠線処理を飛ばしても出て
+    # はいけない。ここまで一緒に外すと写っていない線まで SVG に入り、
+    # DRAWING 合わせではその範囲に合わせて絵全体が縮む
+    bpy.ops.mesh.primitive_cube_add(
+        size=2.0, location=cam.matrix_world @ Vector((30.0, 0.0, -20.0)))
+    cube = bpy.context.active_object
+    objs = [o for o in scene.objects if o.type == "MESH"]
+    fp_batch.apply_white_material(objs)
+    fp_batch.select_meshes()
+    bpy.ops.fpm.auto_vertex_color()
+
+    width, height = 400, 300
+    opts = svg_export.SvgOptions(depth_res=width, keep_hidden=True)
+    dg = bpy.context.evaluated_depsgraph_get()
+    project = svg_export.Projection(cam, dg, width, height)
+    # keep_hidden では深度を見ないので、レンダーせず「全部背景」で足りる
+    depth = np.full((height, width), np.nan)
+
+    got = svg_export.extract_lines([cube], dg, cam, opts)
+    assert got, "箱から線が出ていない(テストが成立しない)"
+    full, pieces = svg_export.visible_spans(got[0], project, depth, opts,
+                                            "plane")
+    assert not full.any() and not pieces, (
+        "画角の外の線が keep_hidden で残っている: "
+        f"full={int(full.sum())}, pieces={len(pieces)}")
+
+    got = svg_export.extract_lines(
+        [o for o in objs if o is not cube], dg, cam, opts)
+    assert any(svg_export.visible_spans(d, project, depth, opts, "plane")[0]
+               .any() for d in got), "画角の中の線まで消えている"
+
+
+@test("reset takes the add-on back out and restores the look")
+def t46c():
+    from freepencil2 import compat, fp_core
+
+    _svg_scene()
+    scene = bpy.context.scene
+    view_layer = bpy.context.view_layer
+
+    # 触る前の値。控えはこれと一致していなければならない
+    before = {
+        "film_transparent": scene.render.film_transparent,
+        "view_transform": scene.view_settings.view_transform,
+        "use_pass_z": view_layer.use_pass_z,
+    }
+    scene.fpm_file_output = False
+
+    bpy.ops.fpm4.link_button()      # STEP2
+    bpy.ops.fpm2.link_button()      # STEP3
+
+    # 利用者が自分で足したノードは残さなければならない。ノードの型名は
+    # 版で入れ替わるので、作れたものを使う
+    mine = None
+    for kind in ("CompositorNodeCurveRGB", "CompositorNodeBlur",
+                 "CompositorNodeValue"):
+        try:
+            mine = compat.get_compositor_tree(scene).nodes.new(kind)
+            break
+        except RuntimeError:
+            continue
+    assert mine is not None, "テスト用のノードが作れない"
+    mine.label = "MyOwnNode"
+
+    assert scene.render.film_transparent, "STEP2 が背景を透過にしていない"
+    assert any(a.name == "mecha_color" for a in view_layer.aovs), "AOV が無い"
+    assert any(n.type == "GROUP" and n.node_tree
+               and "FreePencil" in n.node_tree.name
+               for m in bpy.data.materials if m.use_nodes and m.node_tree
+               for n in m.node_tree.nodes), "マテリアルに AOV グループが無い"
+    assert any(o.data.color_attributes.get("mecha_color") is not None
+               for o in scene.objects if o.type == "MESH"), "頂点カラーが無い"
+
+    info = fp_core.teardown(scene, view_layer)
+
+    # ノード・AOV・頂点カラーが消えている
+    assert not any(n.type == "GROUP" and n.node_tree
+                   and "FreePencil" in n.node_tree.name
+                   for m in bpy.data.materials if m.use_nodes and m.node_tree
+                   for n in m.node_tree.nodes), "AOV グループが残っている"
+    assert not any(a.name in fp_core.AOV_NAMES for a in view_layer.aovs), (
+        "AOV スロットが残っている")
+    tree = compat.get_compositor_tree(scene)
+    if tree is not None:
+        left = [n.label for n in tree.nodes]
+        assert not any(x.startswith("FreePencil") for x in left), (
+            f"コンポジタに FreePencil のノードが残っている: {left}")
+        assert "MyOwnNode" in left, f"利用者のノードまで消した: {left}"
+    assert not any(o.data.color_attributes.get(name) is not None
+                   for o in scene.objects if o.type == "MESH"
+                   for name in fp_core.VCOL_LAYERS), "頂点カラーが残っている"
+    assert info["vcols"] > 0 and info["aovs"] > 0, info
+
+    # 見た目が元に戻っている
+    assert info["restored"], "控えが無く、設定を戻せていない"
+    assert scene.render.film_transparent == before["film_transparent"], (
+        "背景の透過が戻っていない")
+    assert scene.view_settings.view_transform == before["view_transform"], (
+        "ビュー変換が戻っていない")
+    assert view_layer.use_pass_z == before["use_pass_z"], (
+        "Z パスが戻っていない")
+
+    # 控えを消せば、次に組み立てたときにまた控え直せる
+    fp_core.clear_state(scene)
+    assert not fp_core.load_state(scene), "控えが残っている"
+    assert fp_core.capture_state(scene, view_layer), "控え直せない"
+    assert not fp_core.capture_state(scene, view_layer), (
+        "2回目の控えで上書きしている(書き換え後の値を覚えてしまう)")
+
+
+class _FakeLayout:
+    """UILayout の代わり。呼ばれたことだけ控える。
+
+    パネルの draw はヘッドレスでは走らない(領域が無い)ので、UI 側の
+    取りこぼし — 登録し忘れたプロパティ名、消えたオペレータ ID、
+    未定義の名前 — が回帰テストをすり抜けてしまう。ここだけ差し替えて
+    draw を素通しし、参照先が本当に在るかを見る。
+    """
+
+    def __init__(self, calls):
+        object.__setattr__(self, "calls", calls)
+
+    def __setattr__(self, key, value):
+        pass            # enabled / active / alert / scale_y ... は捨てる
+
+    def __getattr__(self, name):
+        def _any(*args, **kwargs):
+            return self     # column/row/box/split/separator/label...
+        return _any
+
+    def prop(self, data, name, **kwargs):
+        self.calls.append(("prop", data, name))
+
+    def operator(self, idname, **kwargs):
+        self.calls.append(("op", idname))
+        return self
+
+    def operator_menu_enum(self, idname, prop_name, **kwargs):
+        self.calls.append(("op", idname))
+        return self
+
+
+@test("every sidebar panel draws, and its props and operators exist")
+def t_panels():
+    import types
+    from freepencil2 import panel as fp_panel
+
+    _svg_scene()        # カメラ・塗り分け済み = 分岐の多いほうを通す
+    panels = [c for c in vars(fp_panel).values()
+              if isinstance(c, type) and issubclass(c, bpy.types.Panel)
+              and getattr(c, "bl_space_type", "") == "VIEW_3D"]
+    assert len(panels) >= 10, f"パネルが見つからない: {len(panels)}"
+
+    for cls in panels:
+        if hasattr(cls, "poll") and not cls.poll(bpy.context):
+            continue
+        calls = []
+        cls.draw(types.SimpleNamespace(layout=_FakeLayout(calls)),
+                 bpy.context)
+        for call in calls:
+            if call[0] == "prop":
+                _kind, data, name = call
+                assert hasattr(data, name), (
+                    f"{cls.__name__}: プロパティ {name} が登録されていない")
+            else:
+                idname = call[1]
+                mod, _, op = idname.partition(".")
+                assert hasattr(getattr(bpy.ops, mod, None), op), (
+                    f"{cls.__name__}: オペレータ {idname} が無い")
+
+    # 並び順が決まっていること(同じ bl_order だと表示順が実質不定になる)
+    orders = [c.bl_order for c in panels if hasattr(c, "bl_order")]
+    assert len(orders) == len(set(orders)), (
+        f"bl_order が重複している: {sorted(orders)}")
 
 
 @test("SVG: export leaves the user's compositor tree alone")
@@ -2198,6 +2438,59 @@ def t57():
             f"プレビューの線分が書き出しより多い: {n} vs {n_points}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: the preview knows when the camera or model has moved")
+def t57b():
+    from mathutils import Vector
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    scene = bpy.context.scene
+    scene.fpm_svg_depth_res = 400
+    try:
+        svg_export.refresh_preview(bpy.context)
+        assert svg_export._preview_segments is not None, "線分が空"
+        assert not svg_export.preview_stale(bpy.context), (
+            "引き直した直後なのに古い扱いになっている")
+        fresh_color = svg_export.preview_color(bpy.context)
+
+        # カメラを動かす: 隠線処理は当時のカメラのままなので古い
+        cam = scene.camera
+        before = cam.matrix_world.copy()
+        cam.location = cam.location + Vector((1.5, 0.0, 0.0))
+        bpy.context.view_layer.update()
+        assert svg_export.preview_stale(bpy.context), (
+            "カメラを動かしても古いと分からない")
+        # 古い線は薄く引く。同じ濃さだと今の線と見分けが付かない
+        stale_color = svg_export.preview_color(bpy.context)
+        assert stale_color != fresh_color, "古い線の色が変わっていない"
+        assert stale_color[3] < fresh_color[3], "古い線が薄くなっていない"
+        cam.matrix_world = before
+        bpy.context.view_layer.update()
+        assert not svg_export.preview_stale(bpy.context), "戻しても古いまま"
+
+        # モデルを動かしても同じこと
+        obj = next(o for o in scene.objects if o.type == "MESH")
+        obj.location = obj.location + Vector((0.0, 0.0, 1.0))
+        bpy.context.view_layer.update()
+        assert svg_export.preview_stale(bpy.context), (
+            "モデルを動かしても古いと分からない")
+        obj.location = obj.location - Vector((0.0, 0.0, 1.0))
+        bpy.context.view_layer.update()
+
+        # 見え方を変える設定も見る。紙の設定は3Dの線を変えないので見ない
+        scene.fpm_svg_keep_hidden = True
+        assert svg_export.preview_stale(bpy.context), (
+            "隠線処理の設定を変えても古いと分からない")
+        scene.fpm_svg_keep_hidden = False
+        scene.fpm_svg_margin = scene.fpm_svg_margin + 5.0
+        assert not svg_export.preview_stale(bpy.context), (
+            "余白は3Dビューの線を変えないので古くならないはず")
+    finally:
+        svg_export.disable_preview()
+    assert not svg_export.preview_stale(bpy.context), (
+        "消した後に古い判定が残っている")
 
 
 @test("SVG: one file per layer, all sharing the same page transform")

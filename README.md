@@ -38,8 +38,9 @@ extension id (`freepencil2_svg_mod`), operator ids (`fpm*.`), panel ids
 (`FPM_PT_*`) and scene properties (`fpm_*`) are all separate, so neither
 shadows the other. This add-on's sidebar tab is **FreePencil SVG**.
 
-Verified by installing both and enabling them together: 60 registered
-types (30 each) and 160 scene properties (80 each), with both sets live.
+Verified by installing both and enabling them together: both sets of types
+register side by side and stay live. This fork's own side is 33 registered
+types and 93 `fpm_*` scene properties.
 
 **Use only one of them per scene for STEP2/STEP3.** What is separate is the
 *registration*, not the data they write:
@@ -173,13 +174,15 @@ it again after changing a setting.
 | Camera frame | keeps the composition; a small subject stays small on paper |
 | Drawing bounds | fits what was actually drawn to the page, so the margin is constant |
 
-Drawing bounds is the default. Beyond a predictable margin, it makes
-the merge tolerance (in mm) behave honestly against the drawing. When the
-drawing is small on the page, unrelated ends fall inside the tolerance and
-only the path count goes down. Measured: 162x125 mm and 3286 paths by camera
-frame, 246x190 mm and 3802 paths by drawing bounds - the latter is the count
-you actually get at that pen size. Choose the camera frame only when you want
-the composition reproduced on the paper as-is.
+Camera frame is the default, so what you compose in the 3D view is what
+lands on the paper.
+
+Drawing bounds is worth switching to when you want the sheet filled: beyond
+a predictable margin, it makes the merge tolerance (in mm) behave honestly
+against the drawing. When the drawing is small on the page, unrelated ends
+fall inside the tolerance and only the path count goes down. Measured:
+162x125 mm and 3286 paths by camera frame, 246x190 mm and 3802 paths by
+drawing bounds - the latter is the count you actually get at that pen size.
 
 ### Tiling across sheets
 
@@ -227,6 +230,22 @@ deforming rigs export correctly. The current frame is restored afterwards.
 
 The settings are split across three panels: what you touch every time is in
 the parent, with line sources and the finer settings in their own sub-panels.
+
+### Starting over
+
+**Reset** (its own panel, at the bottom) takes the add-on back out of the
+scene: the AOV group is removed from every material, the compositor nodes
+FreePencil built are deleted, its AOV slots are dropped and the vertex
+colours it painted are removed, then the render and viewport settings are
+put back to what they were before STEP2 was first run. Compositor nodes you
+added yourself are left alone - only nodes carrying FreePencil's own labels
+are touched.
+
+The settings from before STEP2 are recorded the first time STEP2 or STEP3
+writes to the scene, and they live in the .blend, so a reset still works
+after closing and reopening the file. The vertex colours go too, so STEP1
+has to be run again afterwards; the operator asks for confirmation first,
+and it is undoable.
 
 ### Plot time estimate
 

@@ -100,7 +100,7 @@ class SvgOptions:
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
                  depth_res=1600, sort=True, keep_hidden=False, seed=42,
                  sources=None, respect_paint=True, layers="NONE",
-                 outline_layer=True, outline_gap=0.02, fit="DRAWING",
+                 outline_layer=True, outline_gap=0.02, fit="CAMERA",
                  plot_speed=80.0, travel_speed=200.0, pen_lift=0.12,
                  split_files=False, depth_bands=3, depth_weight=0.6,
                  hatch=False, hatch_spacing=1.2, hatch_levels=2,
@@ -170,7 +170,7 @@ class SvgOptions:
             layers=g(scene, "fpm_svg_layers", "NONE"),
             outline_layer=g(scene, "fpm_svg_outline_layer", True),
             outline_gap=g(scene, "fpm_svg_outline_gap", 0.02),
-            fit=g(scene, "fpm_svg_fit", "DRAWING"),
+            fit=g(scene, "fpm_svg_fit", "CAMERA"),
             plot_speed=g(scene, "fpm_svg_plot_speed", 80.0),
             travel_speed=g(scene, "fpm_svg_travel_speed", 200.0),
             pen_lift=g(scene, "fpm_svg_pen_lift", 0.12),
@@ -605,8 +605,6 @@ def visible_spans(data, project, depth, opts: SvgOptions, mode: str):
     m = len(edges)
     if m == 0:
         return np.zeros(0, dtype=bool), []
-    if opts.keep_hidden:
-        return np.ones(m, dtype=bool), []
 
     v0 = verts[edges[:, 0]]
     v1 = verts[edges[:, 1]]
@@ -616,11 +614,18 @@ def visible_spans(data, project, depth, opts: SvgOptions, mode: str):
            ).reshape(m * s, 3)
 
     x_px, y_px, plane, ray, inside = project(pts)
-    expected = ray if mode == "ray" else plane
-    buf = sample_depth(depth, x_px, y_px, opts.neighbourhood)
 
-    # 線は面の上にあるので必ず自己遮蔽する。相対バイアスで逃がす
-    vis = inside & (np.isnan(buf) | (expected <= buf * (1.0 + opts.bias)))
+    if opts.keep_hidden:
+        # 飛ばすのは隠線処理だけで、画面外の切り取りは残す。ここまで
+        # 外すとカメラに写っていない線まで SVG に入り、DRAWING 合わせでは
+        # その範囲に合わせて絵全体が縮む(構図が崩れて見える)
+        vis = inside
+    else:
+        expected = ray if mode == "ray" else plane
+        buf = sample_depth(depth, x_px, y_px, opts.neighbourhood)
+        # 線は面の上にあるので必ず自己遮蔽する。相対バイアスで逃がす
+        vis = inside & (np.isnan(buf)
+                        | (expected <= buf * (1.0 + opts.bias)))
     vis = vis.reshape(m, s)
 
     full = vis.all(axis=1)
@@ -1570,6 +1575,68 @@ class FP_OT_EXPORT_SVG(bpy.types.Operator):
 _preview_segments = None      # (N, 2, 3) のワールド座標
 _preview_handle = None
 _preview_info = ""
+_preview_stamp = None         # 計算したときの状態。食い違ったら作り直し
+
+_PREVIEW_COLOR = (0.05, 0.05, 0.05, 0.9)
+# 古い線は薄いグレーで引く。隠線処理は計算したときのカメラのものなので、
+# カメラを動かした後は裏側の線まで残る(深度テストを切って描いているので
+# 手前に重なって見える)。同じ濃さで引くと今の線と見分けが付かない
+_PREVIEW_COLOR_STALE = (0.45, 0.45, 0.45, 0.45)
+
+
+def _mat_stamp(mat) -> tuple:
+    """行列を比較用に丸める。
+
+    matrix_world は代入で位置・回転・拡縮に分解されて組み直されるため、
+    元に戻したつもりでも下位ビットが揃わない(実測: 戻しても「古い」まま
+    になった)。10ミクロンまで丸めれば、実際の移動だけを拾える。
+    """
+    return tuple(round(mat[i][j], 5) for i in range(4) for j in range(4))
+
+
+def _preview_state(context, opts: SvgOptions = None) -> tuple:
+    """プレビューを計算したときの状態。変わったら引き直しが要る。
+
+    見え方を決めるものだけ入れる。紙の設定(ページ・余白・タイル・揺らぎ)
+    は3Dビューの線を変えないので入れない。頂点の塗り直しやメッシュ編集
+    までは見ていない — そこは「更新」を押してもらう。
+    """
+    scene = context.scene
+    cam = scene.camera
+    if cam is None:
+        return ()
+    if opts is None:
+        opts = SvgOptions.from_scene(scene)
+    cd = cam.data
+    return (
+        cam.name,
+        _mat_stamp(cam.matrix_world),
+        cd.type, cd.lens, cd.ortho_scale, cd.sensor_fit,
+        cd.sensor_width, cd.sensor_height, cd.shift_x, cd.shift_y,
+        scene.frame_current,
+        scene.render.resolution_x, scene.render.resolution_y,
+        # モデルを動かしてもカメラを動かしたのと同じことになる
+        tuple((o.name, _mat_stamp(o.matrix_world))
+              for o in scene.objects if o.type == "MESH"),
+        (opts.depth_res, opts.samples, opts.bias, opts.neighbourhood,
+         opts.keep_hidden, opts.seed, opts.respect_paint,
+         tuple(sorted(opts.sources.items()))),
+    )
+
+
+def preview_stale(context) -> bool:
+    """覚えている線が今の状態と食い違っているか。"""
+    if _preview_segments is None or _preview_stamp is None:
+        return False
+    try:
+        return _preview_state(context) != _preview_stamp
+    except (AttributeError, ReferenceError, TypeError):
+        return True    # 見に行けない = もう当てにできない
+
+
+def preview_color(context) -> tuple:
+    """線の色。古いものは薄く引いて、今のものと見分けが付くようにする。"""
+    return _PREVIEW_COLOR_STALE if preview_stale(context) else _PREVIEW_COLOR
 
 
 def compute_preview(context, opts: SvgOptions = None) -> tuple:
@@ -1624,6 +1691,10 @@ def _draw_preview():
 
     if _preview_segments is None or len(_preview_segments) == 0:
         return
+    try:
+        color = preview_color(bpy.context)
+    except Exception:      # noqa: BLE001 - 描画のたびに例外を吐かせない
+        color = _PREVIEW_COLOR
     shader = gpu.shader.from_builtin('UNIFORM_COLOR')
     batch = batch_for_shader(
         shader, 'LINES',
@@ -1632,7 +1703,7 @@ def _draw_preview():
     gpu.state.depth_test_set('NONE')
     gpu.state.blend_set('ALPHA')
     shader.bind()
-    shader.uniform_float("color", (0.05, 0.05, 0.05, 0.9))
+    shader.uniform_float("color", color)
     batch.draw(shader)
     gpu.state.blend_set('NONE')
     gpu.state.line_width_set(1.0)
@@ -1651,18 +1722,23 @@ def enable_preview() -> None:
 
 def disable_preview() -> None:
     """ハンドラを外す。アドオンの unregister からも呼ぶこと。"""
-    global _preview_handle, _preview_segments
+    global _preview_handle, _preview_segments, _preview_stamp
     if _preview_handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_preview_handle, 'WINDOW')
         _preview_handle = None
     _preview_segments = None
+    _preview_stamp = None
 
 
 def refresh_preview(context) -> str:
     """線を計算し直して覚える。戻り値は表示用の一行。"""
-    global _preview_segments, _preview_info
-    segs, n = compute_preview(context)
+    global _preview_segments, _preview_info, _preview_stamp
+    # 状態は計算に使った設定そのもので覚える。作り直すと、その間に
+    # 変えられた設定を「計算済み」として拾ってしまう
+    opts = SvgOptions.from_scene(context.scene)
+    segs, n = compute_preview(context, opts)
     _preview_segments = segs
+    _preview_stamp = _preview_state(context, opts)
     _preview_info = f"{n} segments"
     for area in getattr(context.screen, "areas", ()):
         if area.type == 'VIEW_3D':

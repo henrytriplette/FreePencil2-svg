@@ -10,17 +10,19 @@ F12 のレンダリングは 4.2 でも問題なく線画になる。
 import bpy
 from . import compat
 from . import fp_core
+from . import reset_scene
 
 class LINK_MAKE_FP_OT_NODE(bpy.types.Operator):
     """Create a sample compositor node group for FreePencil."""
     bl_idname = "fpm2.link_button"
     bl_label = "freepencil2"
-    bl_description = "Generate Sample Node"
+    bl_description = "Build the compositor nodes that turn the AOVs into rendered line art (STEP3)"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def description(cls, context, properties):
-        return bpy.app.translations.pgettext("Generate Sample Node")
+        return bpy.app.translations.pgettext(
+            "Build the compositor nodes that turn the AOVs into rendered line art (STEP3)")
 
     def execute(self, context):
         """Build a compositor setup with the selected node group."""
@@ -61,6 +63,8 @@ class LINK_MAKE_FP_OT_NODE(bpy.types.Operator):
 
         if context.scene.fpm_enable_compositor_view:
             if compat.HAS_AOV_IN_VIEWPORT_COMPOSITOR:
+                # 切り替える前の表示設定を控える(リセットで戻す先)
+                reset_scene.capture_view_state(context.scene, context.screen)
                 for area in context.screen.areas:
                     if area.type == 'VIEW_3D':
                         area.spaces[0].shading.type = 'RENDERED'

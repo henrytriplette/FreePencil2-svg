@@ -476,6 +476,10 @@ msgid "Clear preview"
 msgstr "Clear preview"
 
 msgctxt "*"
+msgid "Preview is out of date - refresh"
+msgstr "Preview is out of date - refresh"
+
+msgctxt "*"
 msgid "Preview in viewport"
 msgstr "Preview in viewport"
 
@@ -714,3 +718,131 @@ msgstr "Tile columns"
 msgctxt "*"
 msgid "Tile rows"
 msgstr "Tile rows"
+
+msgctxt "*"
+msgid "Reset scene"
+msgstr "Reset scene"
+
+msgctxt "*"
+msgid "Removes the nodes, AOVs and vertex colours"
+msgstr "Removes the nodes, AOVs and vertex colours"
+
+msgctxt "*"
+msgid "STEP1 has to be run again afterwards"
+msgstr "STEP1 has to be run again afterwards"
+
+msgctxt "*"
+msgid "Reset"
+msgstr "Reset"
+
+msgctxt "*"
+msgid "vertex colours"
+msgstr "vertex colours"
+
+msgctxt "*"
+msgid "no saved state, settings left as they are"
+msgstr "no saved state, settings left as they are"
+
+msgctxt "*"
+msgid "Camera"
+msgstr "Camera"
+
+msgctxt "*"
+msgid "ready"
+msgstr "ready"
+
+msgctxt "*"
+msgid "none in scene"
+msgstr "none in scene"
+
+msgctxt "*"
+msgid "Colour separation"
+msgstr "Colour separation"
+
+msgctxt "*"
+msgid "painted"
+msgstr "painted"
+
+msgctxt "*"
+msgid "not yet"
+msgstr "not yet"
+
+msgctxt "*"
+msgid "current"
+msgstr "current"
+
+msgctxt "*"
+msgid "out of date"
+msgstr "out of date"
+
+msgctxt "*"
+msgid "Add a camera to the scene"
+msgstr "Add a camera to the scene"
+
+msgctxt "*"
+msgid "Ready to export SVG"
+msgstr "Ready to export SVG"
+
+msgctxt "*"
+msgid "Auto setup (paint for SVG)"
+msgstr "Auto setup (paint for SVG)"
+
+msgctxt "*"
+msgid "Auto setup (paint + raster)"
+msgstr "Auto setup (paint + raster)"
+
+msgctxt "*"
+msgid "The model has to be painted first"
+msgstr "The model has to be painted first"
+
+msgctxt "*"
+msgid "Cameras ticked"
+msgstr "Cameras ticked"
+
+msgctxt "*"
+msgid "set them in STEP5"
+msgstr "set them in STEP5"
+
+msgctxt "*"
+msgid "Also set up the raster render (STEP2/STEP3)"
+msgstr "Also set up the raster render (STEP2/STEP3)"
+
+msgctxt "*"
+msgid "Not used by the SVG export"
+msgstr "Not used by the SVG export"
+
+msgctxt "*"
+msgid "Bone colours by rig detection"
+msgstr "Bone colours by rig detection"
+
+msgctxt "*"
+msgid "These ticks feed both batch exports"
+msgstr "These ticks feed both batch exports"
+
+msgctxt "*"
+msgid "Set up AOVs"
+msgstr "Set up AOVs"
+
+msgctxt "*"
+msgid "Build compositor nodes"
+msgstr "Build compositor nodes"
+
+msgctxt "*"
+msgid "Node type"
+msgstr "Node type"
+
+msgctxt "*"
+msgid "STEP1-3 done. Ready to render (F12) or export SVG."
+msgstr "STEP1-3 done. Ready to render (F12) or export SVG."
+
+msgctxt "*"
+msgid "Painted. Ready to export SVG."
+msgstr "Painted. Ready to export SVG."
+
+msgctxt "*"
+msgid "Add the AOV outputs every material needs for the raster render (STEP2)"
+msgstr "Add the AOV outputs every material needs for the raster render (STEP2)"
+
+msgctxt "*"
+msgid "Build the compositor nodes that turn the AOVs into rendered line art (STEP3)"
+msgstr "Build the compositor nodes that turn the AOVs into rendered line art (STEP3)"

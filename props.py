@@ -266,7 +266,15 @@ def register_props():
                  "Full auto turns on the white material preview so the line "
                  "art is visible right after setup. Materials are untouched "
                  "(the compositor is switched); turn it off to see the "
-                 "original materials", True),
+                 "original materials. Needs the raster setup", True),
+                # 既定は OFF。SVG 書き出しはコンポジタを通らないので、
+                # 主目的だけなら STEP2/STEP3 は要らない。ONにすると
+                # ラスタのレンダリング(F12)まで組み上がる
+                ("fpm_auto_raster", "Auto: also set up the raster render",
+                 "Full auto also runs STEP2 (AOV) and STEP3 (compositor "
+                 "nodes), for rendering line art as an image with F12. The "
+                 "SVG export does not use them, so this is off by default",
+                 False),
             )
         },
         "fpm_supersample": BoolProperty(
@@ -563,7 +571,9 @@ def register_props():
                  "Fit what was actually drawn to the page, so the margin is "
                  "the same whatever the framing"),
             ],
-            default='DRAWING'
+            # 既定はカメラ。3Dビューで組んだ構図がそのまま紙に出るほうが
+            # 予想と合う。DRAWING は紙いっぱいに使いたいときの選択肢
+            default='CAMERA'
         ),
         "fpm_svg_depth_bands": IntProperty(
             name="Depth bands",
@@ -748,6 +758,7 @@ def unregister_props():
         "fpm_auto_sharp", "fpm_auto_seam", "fpm_auto_merge", "fpm_auto_part_tint",
         "fpm_auto_bone", "fpm_auto_aa", "fpm_auto_hashed", "fpm_auto_file_output",
         "fpm_auto_detect_aov", "fpm_auto_supersample", "fpm_auto_white_preview",
+        "fpm_auto_raster",
         "fpm_color_noise_scale", "fpm_min_neighbor_color_distance",
         "fpm_max_color_retries",
         "fpm_use_random_seed", "fpm_color_seed",

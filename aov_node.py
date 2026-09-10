@@ -2,6 +2,7 @@
 
 import bpy
 from . import compat
+from . import reset_scene
 from . import utils
 from . import fp_core
 
@@ -9,12 +10,13 @@ class LINK_MAKE_FP_OT_AOV_NODE(bpy.types.Operator):
     """Create AOV node groups in the current material."""
     bl_idname = "fpm4.link_button"
     bl_label = "freepencil4"
-    bl_description = "Generate Sample Node"
+    bl_description = "Add the AOV outputs every material needs for the raster render (STEP2)"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def description(cls, context, properties):
-        return bpy.app.translations.pgettext("Generate Sample Node")
+        return bpy.app.translations.pgettext(
+            "Add the AOV outputs every material needs for the raster render (STEP2)")
 
     def execute(self, context):
         """Generate and insert the FreePencil AOV node group."""
@@ -57,6 +59,8 @@ class LINK_MAKE_FP_OT_AOV_NODE(bpy.types.Operator):
         # ビューポートコンポジタは AOV を評価しないため、切り替えても
         # 真っ白になるだけ。その場合は SOLID のままにしておく。
         if context.screen is not None and compat.HAS_AOV_IN_VIEWPORT_COMPOSITOR:
+            # 切り替える前の表示設定を控える(リセットで戻す先)
+            reset_scene.capture_view_state(context.scene, context.screen)
             for area in context.screen.areas:
                 if area.type == 'VIEW_3D':
                     area.spaces[0].shading.type = 'RENDERED'

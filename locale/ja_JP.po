@@ -557,6 +557,10 @@ msgid "Clear preview"
 msgstr "プレビューを消す"
 
 msgctxt "*"
+msgid "Preview is out of date - refresh"
+msgstr "プレビューが古いままです。更新してください"
+
+msgctxt "*"
 msgid "Preview in viewport"
 msgstr "ビューポートに表示"
 
@@ -795,3 +799,131 @@ msgstr "分割する列数"
 msgctxt "*"
 msgid "Tile rows"
 msgstr "分割する行数"
+
+msgctxt "*"
+msgid "Reset scene"
+msgstr "シーンをリセット"
+
+msgctxt "*"
+msgid "Removes the nodes, AOVs and vertex colours"
+msgstr "ノード・AOV・頂点カラーを取り除きます"
+
+msgctxt "*"
+msgid "STEP1 has to be run again afterwards"
+msgstr "あとで STEP1 からやり直しになります"
+
+msgctxt "*"
+msgid "Reset"
+msgstr "リセット"
+
+msgctxt "*"
+msgid "vertex colours"
+msgstr "頂点カラー"
+
+msgctxt "*"
+msgid "no saved state, settings left as they are"
+msgstr "控えが無いので設定はそのままです"
+
+msgctxt "*"
+msgid "Camera"
+msgstr "カメラ"
+
+msgctxt "*"
+msgid "ready"
+msgstr "あり"
+
+msgctxt "*"
+msgid "none in scene"
+msgstr "シーンにありません"
+
+msgctxt "*"
+msgid "Colour separation"
+msgstr "塗り分け"
+
+msgctxt "*"
+msgid "painted"
+msgstr "済み"
+
+msgctxt "*"
+msgid "not yet"
+msgstr "まだ"
+
+msgctxt "*"
+msgid "current"
+msgstr "最新"
+
+msgctxt "*"
+msgid "out of date"
+msgstr "古い"
+
+msgctxt "*"
+msgid "Add a camera to the scene"
+msgstr "シーンにカメラを追加してください"
+
+msgctxt "*"
+msgid "Ready to export SVG"
+msgstr "SVG を書き出せます"
+
+msgctxt "*"
+msgid "Auto setup (paint for SVG)"
+msgstr "全自動（SVG 用に塗る）"
+
+msgctxt "*"
+msgid "Auto setup (paint + raster)"
+msgstr "全自動（塗り＋ラスタ設定）"
+
+msgctxt "*"
+msgid "The model has to be painted first"
+msgstr "先にモデルを塗り分けます"
+
+msgctxt "*"
+msgid "Cameras ticked"
+msgstr "チェック済みカメラ"
+
+msgctxt "*"
+msgid "set them in STEP5"
+msgstr "STEP5 で選びます"
+
+msgctxt "*"
+msgid "Also set up the raster render (STEP2/STEP3)"
+msgstr "ラスタのレンダリングも設定する（STEP2/STEP3）"
+
+msgctxt "*"
+msgid "Not used by the SVG export"
+msgstr "SVG 書き出しでは使いません"
+
+msgctxt "*"
+msgid "Bone colours by rig detection"
+msgstr "リグ検出でボーン色"
+
+msgctxt "*"
+msgid "These ticks feed both batch exports"
+msgstr "このチェックは SVG とラスタの両方で使います"
+
+msgctxt "*"
+msgid "Set up AOVs"
+msgstr "AOV を設定"
+
+msgctxt "*"
+msgid "Build compositor nodes"
+msgstr "コンポジタのノードを建てる"
+
+msgctxt "*"
+msgid "Node type"
+msgstr "ノードの種類"
+
+msgctxt "*"
+msgid "STEP1-3 done. Ready to render (F12) or export SVG."
+msgstr "STEP1〜3 まで完了。F12 でレンダー、または SVG を書き出せます。"
+
+msgctxt "*"
+msgid "Painted. Ready to export SVG."
+msgstr "塗り分けまで完了。SVG を書き出せます。"
+
+msgctxt "*"
+msgid "Add the AOV outputs every material needs for the raster render (STEP2)"
+msgstr "ラスタのレンダリングに要る AOV を全マテリアルに足します（STEP2）"
+
+msgctxt "*"
+msgid "Build the compositor nodes that turn the AOVs into rendered line art (STEP3)"
+msgstr "AOV から線画を作るコンポジタのノードを建てます（STEP3）"
