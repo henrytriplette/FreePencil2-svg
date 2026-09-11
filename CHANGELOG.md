@@ -1,5 +1,24 @@
 # FreePencil2 - Changelog
 
+## [Unreleased]
+### Fixed
+- **Tiled single-layer exports with registration marks were not valid
+  XML.** `svg_document` only declared `xmlns:inkscape` on the `<svg>` root
+  when the export was split into layers, but `tile_layers` always adds the
+  `regmarks` group when marks are on, and that group carries
+  `inkscape:groupmode="layer"` / `inkscape:label` like every layer group.
+  So with `layers=NONE`, more than one tile and marks enabled, every sheet
+  used the `inkscape:` prefix without declaring it. Inkscape and browsers
+  are lenient about this; `xml.etree` (`unbound prefix`) and strict plotter
+  drivers are not, and refused the files.
+
+  The declaration now follows the groups actually written
+  (`_is_layer_group`): it appears whenever any `<g>` carries the prefix and
+  is still omitted from the plain single-layer file, which stays free of
+  Inkscape-specific markup as before. Regression test: a 2x1 tiled
+  single-layer export with marks parses with `xml.etree.ElementTree`, and
+  the untiled single-layer file still has no `xmlns:inkscape`.
+
 ## [2.13.0] - 2026-09-11
 ### Changed
 - **Where a line disappears behind something is now found to 1/256 of the

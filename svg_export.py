@@ -1523,10 +1523,21 @@ def layer_color(name: str, index: int, opts: SvgOptions) -> str:
     return palette[(index - 1) % len(palette)]
 
 
+def _is_layer_group(name: str, opts: SvgOptions) -> bool:
+    """その <g> に inkscape:groupmode / inkscape:label を付けるか。
+
+    単層のときの lines / hatch は素の <g> にして、Inkscape を知らない
+    ドライバにも余計なものを見せない。それ以外(層に分けたとき、単層でも
+    タイルのトンボ "regmarks")はレイヤーとして読ませたいので付ける。
+    """
+    return not (opts.layers == "NONE" and name in ("lines", "hatch"))
+
+
 def svg_document(prepared, page_w: float, page_h: float,
                  opts: SvgOptions) -> str:
     """用意済みの mm 折れ線を SVG 文字列にする。"""
     body = []
+    needs_ns = False
     for i, name in enumerate(_layer_order(prepared.keys()), start=1):
         rows = []
         for mm in prepared[name]:
@@ -1534,20 +1545,24 @@ def svg_document(prepared, page_w: float, page_h: float,
             rows.append(f'<polyline points="{coords}"/>')
         if not rows:
             continue
-        if opts.layers == "NONE" and name in ("lines", "hatch"):
-            attrs = ""
-        else:
+        if _is_layer_group(name, opts):
             # vpype と Inkscape はこの2属性でレイヤーとして読む
             attrs = (f' inkscape:groupmode="layer" inkscape:label="{name}"'
                      f' id="layer{i}"')
+            needs_ns = True
+        else:
+            attrs = ""
         body.append(
             f'<g{attrs} fill="none" stroke="{layer_color(name, i, opts)}"'
             f' stroke-width="{layer_pen(name, opts):.4g}"\n'
             '   stroke-linecap="round" stroke-linejoin="round">\n'
             + "\n".join(rows) + "\n</g>")
 
-    ns = ("" if opts.layers == "NONE"
-          else f'\n     xmlns:inkscape="{INKSCAPE_NS}"')
+    # 接頭辞を使う <g> が1つでもあれば宣言する。opts.layers だけで決めると
+    # 単層 + タイルのトンボ("regmarks" は常にレイヤー扱い)で inkscape: が
+    # 未宣言のまま出て、xml.etree や厳格なプロッタドライバが読めなくなる。
+    # 単層で接頭辞を使わないファイルは今までどおり宣言しない
+    ns = (f'\n     xmlns:inkscape="{INKSCAPE_NS}"' if needs_ns else "")
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             f'<svg xmlns="http://www.w3.org/2000/svg" version="1.1"{ns}\n'
             f'     width="{page_w}mm" height="{page_h}mm"\n'
