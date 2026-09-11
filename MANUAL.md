@@ -5,8 +5,9 @@ workflow is laid out, and what every button and setting in the sidebar does.
 For the background, measurements and design reasoning, see [README.md](README.md);
 for what changed between versions, see [CHANGELOG.md](CHANGELOG.md).
 
-Version documented: **2.13.0**. Blender **4.2 - 5.2** (see
-[Supported Blender versions](#supported-blender-versions)).
+Version documented: **2.13.0** plus the unreleased fix for tiled
+single-layer exports (see [CHANGELOG.md](CHANGELOG.md)). Blender
+**4.2 - 5.2** (see [Supported Blender versions](#supported-blender-versions)).
 
 ---
 
@@ -276,7 +277,7 @@ Plot a drawing larger than the machine bed by splitting it across sheets.
 | Setting | Default | Range | What it does |
 |---|---|---|---|
 | **Columns** / **Rows** | 1 / 1 | 1 - 6 each | Number of sheets horizontally / vertically. 1×1 = no tiling. The drawing is fitted to the *composite* (columns × page wide, rows × page tall), then cut; each sheet is written at page size as `<name>_r1c1.svg`, `<name>_r1c2.svg`, … |
-| **Registration marks** | on | - | Corner marks (6 mm L-shapes, 3 mm inset) on every sheet, in a `regmarks` layer, for lining the sheets up. |
+| **Registration marks** | on | - | Corner marks (6 mm L-shapes, 3 mm inset) on every sheet, in a `regmarks` Inkscape layer (whatever the *Layers* setting), for lining the sheets up. Plot them in a light pen or hide the layer once aligned. |
 
 Merging, simplification, jitter and sorting are done **once on the composite**
 before cutting, so lines agree exactly across seams. The margin applies to the
@@ -635,9 +636,15 @@ others are left as they are):
   coordinates, inside a `<g>` carrying `fill="none"`, the stroke colour,
   `stroke-width` (mm), round caps and joins.
 - With any layer mode other than *Single layer*, each group also has
-  `inkscape:groupmode="layer" inkscape:label="<name>" id="layerN"` and the
-  root declares the Inkscape namespace - this is what vpype and Inkscape read
-  as layers.
+  `inkscape:groupmode="layer" inkscape:label="<name>" id="layerN"` - this is
+  what vpype and Inkscape read as layers. The `regmarks` group of a tiled
+  export is always a layer, so it can be switched off or sent to a separate
+  pen even in *Single layer* mode.
+- The `xmlns:inkscape` namespace is declared on the root whenever any group
+  uses it (layered exports, and tiled single-layer exports with
+  registration marks). A plain single-layer file has no Inkscape-specific
+  markup at all, so plotter drivers that do not know Inkscape see nothing
+  unusual.
 - Layer order in the file: `hatch` first (it is a background), then
   `outline`, `silhouette`, `freestyle`, `crease`, `sharp`, `mecha`,
   `material`, `bone`, `open`, then `depth1`…`depth5`, then anything else
@@ -803,6 +810,7 @@ estimated_seconds, files written).
 | Two FreePencil add-ons fight over the compositor | Run STEP2/STEP3 from only one add-on per scene. |
 | Blender 4.2: no live line preview | Expected - the 4.2 viewport compositor ignores AOVs. Render with F12. SVG export is unaffected. |
 | Transparent (BLEND) materials lose lines in the raster render | STEP0 converts them to HASHED unless *BLEND to HASHED* is off. |
+| A tiled export is rejected with **unbound prefix** / `inkscape` by a strict parser or plotter driver | Fixed after 2.13.0 (the `regmarks` layer used the Inkscape prefix without declaring it in single-layer mode). Update the add-on, or open and re-save the sheet in Inkscape. |
 
 ---
 
