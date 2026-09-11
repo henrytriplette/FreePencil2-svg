@@ -148,11 +148,16 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         if svg_export.preview_enabled():
             row.operator(FP_OT_SVG_PREVIEW_CLEAR.bl_idname,
                          text="", icon="X")
+            layout.prop(scene, "fpm_svg_preview_auto",
+                        text=t("Auto refresh"))
             info = svg_export.preview_info()
             # カメラやモデルを動かした後の線は、隠線処理が当時のままで
-            # 裏側の線まで残る。黙っていると「二重に出る」と受け取られる
+            # 裏側の線まで残る。黙っていると「二重に出る」と受け取られる。
+            # 自動更新が ON なら、止まった時点で引き直される
             if svg_export.preview_stale(context):
-                layout.label(text=t("Preview is out of date - refresh"),
+                layout.label(text=t("Preview is out of date - updating")
+                             if scene.fpm_svg_preview_auto
+                             else t("Preview is out of date - refresh"),
                              icon="ERROR")
             elif info:
                 layout.label(text=f"{t('Preview')}: {info}", icon="INFO")
@@ -168,6 +173,9 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         sub = col.row(align=True)
         sub.enabled = scene.fpm_svg_layers != "NONE"
         sub.prop(scene, "fpm_svg_split_files", text=t("One file per layer"))
+        sub = col.row(align=True)
+        sub.enabled = scene.fpm_svg_layers != "NONE"
+        sub.prop(scene, "fpm_svg_layer_colors", text=t("Colour layers"))
         sub = col.column(align=True)
         sub.enabled = scene.fpm_svg_layers == "DEPTH"
         sub.prop(scene, "fpm_svg_depth_bands", text=t("Depth bands"))
@@ -181,6 +189,7 @@ class FP_PT_SvgExport(_FPSub, bpy.types.Panel):
         col.prop(scene, "fpm_svg_hatch_levels", text=t("Hatch levels"))
         col.prop(scene, "fpm_svg_hatch_angle", text=t("Hatch angle"))
         col.prop(scene, "fpm_svg_hatch_threshold", text=t("Hatch threshold"))
+        col.prop(scene, "fpm_svg_hatch_pen", text=t("Hatch pen width (mm)"))
 
         col = layout.column(align=True)
         col.label(text=t("Tiling"))
@@ -247,6 +256,16 @@ class FP_PT_SvgSources(_FPSub, bpy.types.Panel):
         col.prop(scene, "fpm_svg_src_silhouette", text=t("Silhouette"))
         col.prop(scene, "fpm_svg_respect_paint", text=t("Honour STEP4 paint"))
 
+        # 頂点カラーを経ない手動の口。塗り分けを触らずに線を足せる
+        col = self.layout.column(align=True)
+        col.label(text=t("Marked by hand"))
+        col.prop(scene, "fpm_svg_src_freestyle", text=t("Freestyle marks"))
+        col.prop(scene, "fpm_svg_src_sharp", text=t("Sharp marks"))
+        col.prop(scene, "fpm_svg_src_crease", text=t("Crease angle"))
+        sub = col.row(align=True)
+        sub.enabled = scene.fpm_svg_src_crease
+        sub.prop(scene, "fpm_svg_crease_angle", text=t("Angle (deg)"))
+
 
 class FP_PT_SvgAdvanced(_FPSub, bpy.types.Panel):
     """一度決めたら普段は触らない設定。"""
@@ -266,12 +285,17 @@ class FP_PT_SvgAdvanced(_FPSub, bpy.types.Panel):
         col.prop(scene, "fpm_svg_merge_tolerance", text=t("Merge (mm)"))
         col.prop(scene, "fpm_svg_simplify", text=t("Simplify (mm)"))
         col.prop(scene, "fpm_svg_sort", text=t("Sort draw order"))
+        sub = col.row(align=True)
+        sub.enabled = scene.fpm_svg_sort
+        sub.prop(scene, "fpm_svg_home", text=t("Pen home"))
 
         col = layout.column(align=True)
         col.label(text=t("Outline layer"))
         col.enabled = scene.fpm_svg_layers == "SOURCE"
         col.prop(scene, "fpm_svg_outline_layer", text=t("Outline layer"))
         col.prop(scene, "fpm_svg_outline_gap", text=t("Outline depth step"))
+        col.prop(scene, "fpm_svg_outline_pen",
+                 text=t("Outline pen width (mm)"))
 
         col = layout.column(align=True)
         col.label(text=t("Hidden line removal"))

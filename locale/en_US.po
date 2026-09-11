@@ -846,3 +846,47 @@ msgstr "Add the AOV outputs every material needs for the raster render (STEP2)"
 msgctxt "*"
 msgid "Build the compositor nodes that turn the AOVs into rendered line art (STEP3)"
 msgstr "Build the compositor nodes that turn the AOVs into rendered line art (STEP3)"
+
+msgctxt "*"
+msgid "Auto refresh"
+msgstr "Auto refresh"
+
+msgctxt "*"
+msgid "Preview is out of date - updating"
+msgstr "Preview is out of date - updating"
+
+msgctxt "*"
+msgid "Colour layers"
+msgstr "Colour layers"
+
+msgctxt "*"
+msgid "Hatch pen width (mm)"
+msgstr "Hatch pen width (mm)"
+
+msgctxt "*"
+msgid "Marked by hand"
+msgstr "Marked by hand"
+
+msgctxt "*"
+msgid "Freestyle marks"
+msgstr "Freestyle marks"
+
+msgctxt "*"
+msgid "Sharp marks"
+msgstr "Sharp marks"
+
+msgctxt "*"
+msgid "Crease angle"
+msgstr "Crease angle"
+
+msgctxt "*"
+msgid "Angle (deg)"
+msgstr "Angle (deg)"
+
+msgctxt "*"
+msgid "Pen home"
+msgstr "Pen home"
+
+msgctxt "*"
+msgid "Outline pen width (mm)"
+msgstr "Outline pen width (mm)"

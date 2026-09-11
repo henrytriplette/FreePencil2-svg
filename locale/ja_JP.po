@@ -927,3 +927,47 @@ msgstr "ラスタのレンダリングに要る AOV を全マテリアルに足�
 msgctxt "*"
 msgid "Build the compositor nodes that turn the AOVs into rendered line art (STEP3)"
 msgstr "AOV から線画を作るコンポジタのノードを建てます（STEP3）"
+
+msgctxt "*"
+msgid "Auto refresh"
+msgstr "自動更新"
+
+msgctxt "*"
+msgid "Preview is out of date - updating"
+msgstr "プレビューが古いままです。止まったら引き直します"
+
+msgctxt "*"
+msgid "Colour layers"
+msgstr "レイヤーを色分け"
+
+msgctxt "*"
+msgid "Hatch pen width (mm)"
+msgstr "ハッチのペン幅 (mm)"
+
+msgctxt "*"
+msgid "Marked by hand"
+msgstr "手でマークした辺"
+
+msgctxt "*"
+msgid "Freestyle marks"
+msgstr "Freestyle マーク"
+
+msgctxt "*"
+msgid "Sharp marks"
+msgstr "Sharp マーク"
+
+msgctxt "*"
+msgid "Crease angle"
+msgstr "折れ目の角度"
+
+msgctxt "*"
+msgid "Angle (deg)"
+msgstr "角度 (度)"
+
+msgctxt "*"
+msgid "Pen home"
+msgstr "ペンの原点"
+
+msgctxt "*"
+msgid "Outline pen width (mm)"
+msgstr "外周のペン幅 (mm)"

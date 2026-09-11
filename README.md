@@ -89,8 +89,9 @@ compositor's Sobel draws a band with width, so tracing it makes a plotter go
 around each line twice as an outline. Emitting the edge itself always gives a
 single centreline.
 
-- Hidden-line removal compares against the Z pass; only what is in front survives
-- Line ends are joined and the draw order is optimised before writing
+- Hidden-line removal compares against the Z pass; only what is in front survives.
+  Where a line goes behind something, the cut is bisected to 1/256 of the edge
+- Line ends are joined and the draw order is optimised (greedy, then 2-opt) before writing
 - Millimetres, no fill, constant stroke width (stroke width = pen width)
 - STEP4 paint is honoured: lines erased with `mask_color`, or made invisible
   with `line_color`, do not reach the SVG either
@@ -106,6 +107,9 @@ Each source can be switched on or off independently.
 | Bone boundaries | **OFF** | edges where `bone_color` differs; adds many lines |
 | Open edges | ON | edges without exactly two faces |
 | Silhouette | ON | edges where the surface turns away from the camera |
+| Freestyle marks | OFF | edges marked with *Edge > Mark Freestyle Edge* |
+| Sharp marks | OFF | edges marked with *Edge > Mark Sharp* |
+| Crease angle | OFF | edges whose dihedral angle is at or above the threshold |
 
 **Open edges** are abundant in imported CAD with unwelded shells: 255,985 of
 683,165 edges (37%) on the measured model. Switching them off cuts the count.
@@ -113,6 +117,10 @@ Each source can be switched on or off independently.
 **Bone boundaries** are the one source whose default differs from the raster
 path (`fpm_ch_bone` defaults to 1.0). On a plotter they add too many lines, so
 turn them on only if you want them.
+
+The three **marked by hand** sources add lines without touching the vertex
+colours: mark edges in Edit mode, or set a crease angle, and they join the
+layer split like any other source.
 
 ### Depth-cued line weight
 
@@ -151,7 +159,8 @@ so the darkest areas end up cross-hatched.
 
 The output can be split into SVG layers (`Single layer` / `By line source` /
 `By object`). vpype and Inkscape read these, so you can assign a different pen
-to each.
+to each. Each layer gets its own stroke colour (`Colour layers`) so they are
+told apart on screen; plotters ignore it, and a single layer stays black.
 
 Layers can also be written as **separate files** (`<name>_<layer>.svg`). The
 page transform is computed once across all layers and shared, so the files
@@ -165,7 +174,9 @@ pens, a single layer plots fastest.
 To draw the outline in a heavier pen, use the **outline layer** (on by
 default). It looks to either side of each edge in the depth buffer and keeps
 only those where one side is background, or drops away sharply behind the
-edge, putting them in an `outline` layer.
+edge, putting them in an `outline` layer. **Outline pen width** (and **Hatch
+pen width** for hatching) give that layer its own stroke width; 0 means the
+main pen width.
 
 **The silhouette layer is not the outer contour.** It holds every edge where
 adjacent faces flip between front- and back-facing, which on thin-plate CAD
@@ -184,8 +195,12 @@ the SVG somewhere else.
 
 Hidden-line removal is computed for the render camera, so **it is only
 truthful from camera view** - orbit away and the occlusion no longer matches
-(the line positions still do). It does not follow changes on its own; press
-it again after changing a setting.
+(the line positions still do).
+
+With **Auto refresh** (on by default) the preview recomputes itself once the
+camera, the meshes and the settings have held still for a moment, so you can
+nudge the camera and watch the lines follow. Turn it off on a scene where the
+preview takes long enough to get in the way, and press the button instead.
 
 ### Fitting to the page
 
@@ -244,6 +259,10 @@ curves.
 camera ticked in STEP5 (the .blend must be saved). If one camera fails the
 rest are still written, and the failure is reported.
 
+Both batches run in the background of the UI: the status bar shows
+`SVG 12/250 frames - Esc to cancel`, and Esc stops after the current file
+with the camera or frame put back.
+
 **Export frame range** writes `//svg_exports/frame_####.svg` over the
 scene's frame range and step, re-evaluating the meshes each frame, so
 deforming rigs export correctly. The current frame is restored afterwards.
@@ -280,7 +299,12 @@ Measured (a 1,047,642-face CAD model, A4 landscape, 1600 px):
 |---|---|---|
 | chains split at junctions | 26927 | 183948 mm |
 | line ends joined (0.1 mm default) | 3286 | — |
-| draw order sorted | 3286 | 2997 mm |
+| draw order sorted (greedy) | 3286 | 2997 mm |
+
+A 2-opt pass then runs on the greedy order; on the demo scene it cut the
+travel by a quarter (782 -> 590 mm at 400 px). **Pen home** (Advanced) is
+the corner the plotter parks in - top left by default, as AxiDraw - so the
+first move is short.
 
 About 5 seconds for the whole export (excluding the color separation).
 
@@ -322,20 +346,22 @@ Blender 4.5, from pressing STEP0 until completion (each measured twice).
 ## Supported versions
 
 The same package can be installed on all of the following, and the regression
-tests are run on **all four** (70 of them now, 30 covering the SVG export).
+tests are run on **all four** (84 of them now, 39 covering the SVG export).
 | Blender | Status | SVG export | Rendering | Live viewport preview |
 |---|---|---|---|---|
-| 5.2.1 LTS | Recommended | ✅ 70/70 | ✅ | ✅ |
-| 4.5.6 LTS | Recommended | ✅ 70/70 | ✅ | ✅ |
-| 4.3.2 | Verified | ✅ 70/70 | ✅ | ✅ |
-| 4.2.23 LTS | **Limited support** | ✅ 70/70 | ✅ | ❌ |
+| 5.2.1 LTS | Recommended | ✅ 84/84 | ✅ | ✅ |
+| 4.5.6 LTS | Recommended | ✅ 84/84 | ✅ | ✅ |
+| 4.3.2 | Verified | ✅ 84/84 | ✅ | ✅ |
+| 4.2.23 LTS | **Limited support** | ✅ 84/84 | ✅ | ❌ |
 
-**The SVG export produces identical results on all four.** Edge count, path
-count, point count, drawn length, travel and the per-layer breakdown all match
-exactly on the same scene (574 edges, 71 paths, 195 points, 1458.3 mm drawn,
-1578.8 mm travel on 4.2.23 / 4.3.2 / 4.5.6 / 5.2.1). Unlike the raster path's
-"within 1.1% across four versions", this is geometry rather than pixel
-sampling, so it matches exactly.
+**The SVG export produces the same lines on all four.** Edge count, path
+count, point count and the per-layer breakdown match exactly on the same
+scene (562 edges, 288 paths, 764 points at 400 px on 4.2.23 / 4.3.2 / 4.5.6 /
+5.2.1). The drawn length differs by 0.2 mm in 1232 between 4.2/4.3 and
+4.5/5.2: where a line is cut by occlusion is now refined against the depth
+pass, and the two EEVEE generations place that pixel slightly differently.
+Unlike the raster path's "within 1.1% across four versions", this is
+geometry rather than pixel sampling.
 
 The "limited support" note on 4.2 is about the raster live preview (below).
 It does not affect the SVG export.

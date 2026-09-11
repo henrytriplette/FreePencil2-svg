@@ -5,13 +5,17 @@
 それを追跡するとプロッタが輪郭を二重になぞってしまう。辺そのものを出せば
 常に1本の中心線になる。
 
-線の出どころは5つあり、個別に ON/OFF できる(LINE_SOURCES)。
+線の出どころは8つあり、個別に ON/OFF できる(LINE_SOURCES)。
 
   mecha      … 面2枚の mecha_color が違う(塗り分け法の線そのもの)
   material   … マテリアルが変わる
   bone       … bone_color が違う(既定 OFF。プロッタでは線が増えすぎる)
   open       … 面が2枚ない(開いた縁・非多様体)
   silhouette … カメラから見て表裏が入れ替わる(外形線)
+  freestyle  … Freestyle 用にマークした辺(既定 OFF。手で線を足す口)
+  sharp      … Sharp をマークした辺(既定 OFF)
+  crease     … 二面角がしきい値以上の辺(既定 OFF。塗り分けを経ずに
+               折れ目だけ欲しいとき)
 
 STEP4 の mask_color / line_color も見る。ビューポートで消した線が SVG に
 残らないようにするため。
@@ -53,8 +57,20 @@ BACKGROUND_Z = 1e9          # Z パスの背景。EEVEE は 1e10 を書く
 # チャンネルを見る。中間はプロッタでは表現できないので 0.5 で二値化する
 PAINT_THRESHOLD = 0.5
 
-# 線の出どころ。ラスタ経路の fp_ch_* に対応する
-LINE_SOURCES = ("mecha", "material", "bone", "open", "silhouette")
+# 線の出どころ。前の5つはラスタ経路の fp_ch_* に対応する。後の3つは
+# 頂点カラーを経ない手動の口(Freestyle / Sharp のマーク、二面角)
+LINE_SOURCES = ("mecha", "material", "bone", "open", "silhouette",
+                "freestyle", "sharp", "crease")
+
+# 既定で入れる出どころ。bone は fpm_ch_bone が 1.0 でもここでは切る
+# (プロッタでは線が増えすぎる)。手動の3つは要る人だけ入れる
+DEFAULT_SOURCES = dict(mecha=True, material=True, bone=False,
+                       open=True, silhouette=True,
+                       freestyle=False, sharp=False, crease=False)
+
+# Freestyle のマークはこの名前の辺属性に入っている。RNA の
+# use_freestyle_mark は版によって有無が揺れるので、属性で読む
+FREESTYLE_EDGE_ATTR = "freestyle_edge"
 
 # レイヤーに分けるときの優先順。1本の辺が複数の出どころに当てはまるのは
 # 普通なので(塗り分け境界かつ外形線、など)、どれか1つに決める必要がある。
@@ -65,8 +81,19 @@ LINE_SOURCES = ("mecha", "material", "bone", "open", "silhouette")
 # 外周が要るなら outline を使うこと。こちらは深度バッファで実際に絵の縁に
 # なっている辺だけを拾う(contour_mask)。優先順で outline を先頭に置いて
 # いるのは、太いペンを割り当てたくなるのがここだから
-LAYER_PRIORITY = ("outline", "silhouette", "mecha", "material",
-                  "bone", "open")
+LAYER_PRIORITY = ("outline", "silhouette", "freestyle", "crease", "sharp",
+                  "mecha", "material", "bone", "open")
+
+# レイヤーごとの stroke 色。プロッタは色を見ないが、Inkscape や vpype で
+# 開いたときにどの線がどの層かひと目で分かる。順は _LAYER_ORDER_HINT に
+# 合わせて引く。単層のときは黒のまま
+# 先頭は単層の黒、末尾はハッチの灰。間の 15 色が _LAYER_ORDER_HINT の
+# 名前(14 個)に折り返し無しで当たる
+LAYER_COLORS = ("#000000",
+                "#d62728", "#1f77b4", "#2ca02c", "#9467bd", "#ff7f0e",
+                "#8c564b", "#e377c2", "#17becf", "#bcbd22", "#393b79",
+                "#e7ba52", "#ad494a", "#6b6ecf", "#8ca252", "#843c39",
+                "#7f7f7f")
 
 INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
 
@@ -94,7 +121,8 @@ class SvgOptions:
                  "split_files", "depth_bands", "depth_weight",
                  "hatch", "hatch_spacing", "hatch_levels", "hatch_angle",
                  "hatch_threshold", "jitter", "jitter_scale", "jitter_seed",
-                 "tile_cols", "tile_rows", "tile_marks")
+                 "tile_cols", "tile_rows", "tile_marks", "home",
+                 "crease_angle", "layer_colors", "outline_pen", "hatch_pen")
 
     def __init__(self, page="A4", margin=10.0, pen=0.3, merge_tolerance=0.1,
                  simplify=0.05, samples=8, bias=0.001, neighbourhood=0,
@@ -106,7 +134,14 @@ class SvgOptions:
                  hatch=False, hatch_spacing=1.2, hatch_levels=2,
                  hatch_angle=45.0, hatch_threshold=0.5,
                  jitter=0.0, jitter_scale=8.0, jitter_seed=1.0,
-                 tile_cols=1, tile_rows=1, tile_marks=True):
+                 tile_cols=1, tile_rows=1, tile_marks=True, home="TL",
+                 crease_angle=60.0, layer_colors=True,
+                 outline_pen=0.0, hatch_pen=0.0):
+        self.home = home
+        self.crease_angle = crease_angle
+        self.layer_colors = layer_colors
+        self.outline_pen = outline_pen
+        self.hatch_pen = hatch_pen
         self.tile_cols = tile_cols
         self.tile_rows = tile_rows
         self.tile_marks = tile_marks
@@ -128,10 +163,7 @@ class SvgOptions:
         self.layers = layers
         self.outline_layer = outline_layer
         self.outline_gap = outline_gap
-        # bone だけ既定で切ってある。ラスタ経路の fpm_ch_bone は 1.0 だが、
-        # ボーン境界はプロッタでは線が増えすぎるので出どころとしては任意
-        self.sources = dict(mecha=True, material=True, bone=False,
-                            open=True, silhouette=True)
+        self.sources = dict(DEFAULT_SOURCES)
         if sources:
             self.sources.update(sources)
         self.respect_paint = respect_paint
@@ -164,7 +196,8 @@ class SvgOptions:
             sort=g(scene, "fpm_svg_sort", True),
             keep_hidden=g(scene, "fpm_svg_keep_hidden", False),
             seed=g(scene, "fpm_color_seed", 42),
-            sources={s: bool(g(scene, f"fpm_svg_src_{s}", s != "bone"))
+            sources={s: bool(g(scene, f"fpm_svg_src_{s}",
+                               DEFAULT_SOURCES[s]))
                      for s in LINE_SOURCES},
             respect_paint=g(scene, "fpm_svg_respect_paint", True),
             layers=g(scene, "fpm_svg_layers", "NONE"),
@@ -188,6 +221,11 @@ class SvgOptions:
             tile_cols=g(scene, "fpm_svg_tile_cols", 1),
             tile_rows=g(scene, "fpm_svg_tile_rows", 1),
             tile_marks=g(scene, "fpm_svg_tile_marks", True),
+            home=g(scene, "fpm_svg_home", "TL"),
+            crease_angle=g(scene, "fpm_svg_crease_angle", 60.0),
+            layer_colors=g(scene, "fpm_svg_layer_colors", True),
+            outline_pen=g(scene, "fpm_svg_outline_pen", 0.0),
+            hatch_pen=g(scene, "fpm_svg_hatch_pen", 0.0),
         )
 
 
@@ -301,6 +339,28 @@ def _silhouette(mesh, topo, eval_obj, cam, ne: int) -> np.ndarray:
     return out
 
 
+def _freestyle_marks(mesh, ne: int) -> np.ndarray:
+    """Freestyle 用にマークした辺。無ければ全部 False。"""
+    out = np.zeros(ne, dtype=bool)
+    attr = mesh.attributes.get(FREESTYLE_EDGE_ATTR)
+    if (attr is None or attr.domain != "EDGE"
+            or attr.data_type != "BOOLEAN" or len(attr.data) != ne):
+        return out
+    attr.data.foreach_get("value", out)
+    return out
+
+
+def _crease(topo, degrees: float, ne: int) -> np.ndarray:
+    """二面角がしきい値以上の辺。面が2枚ない辺は open に任せる。"""
+    out = np.zeros(ne, dtype=bool)
+    if ne == 0:
+        return out
+    a = topo.angle
+    ok = topo.two_face & ~np.isnan(a)
+    out[ok] = a[ok] >= np.radians(max(0.0, float(degrees)))
+    return out
+
+
 def _paint_removed(mesh, ev: np.ndarray) -> np.ndarray:
     """STEP4 の塗りで消される辺。
 
@@ -355,6 +415,12 @@ def line_edges(obj, depsgraph, cam, opts: "SvgOptions" = None):
             parts["open"] = ~topo.two_face
         if src.get("silhouette", True):
             parts["silhouette"] = _silhouette(mesh, topo, eval_obj, cam, ne)
+        if src.get("freestyle", False):
+            parts["freestyle"] = _freestyle_marks(mesh, ne)
+        if src.get("sharp", False):
+            parts["sharp"] = topo.sharp.copy()
+        if src.get("crease", False):
+            parts["crease"] = _crease(topo, opts.crease_angle, ne)
 
         if not parts:
             return None
@@ -599,6 +665,14 @@ def choose_depth_mode(depth, project, centers: np.ndarray, seed: int) -> tuple:
     return ("ray" if hits["ray"] > hits["plane"] else "plane"), hits
 
 
+# 部分可視の辺の切れ目を二分探索で詰める回数。標本が s 個なら切れ目の
+# 位置は 1/s の刻みでしか分からない(8 標本で辺の 1/8)。長い CAD の辺が
+# 外形線をまたぐたびに、そのぶん線が足りなかったり出過ぎたりして見える。
+# 5 回で 1/(32 s)、8 標本なら辺の 1/256 まで寄る。対象は部分可視の辺だけ
+# なので、増えるのは投影と深度参照が 5 回ぶんだけ
+REFINE_STEPS = 5
+
+
 def visible_spans(data, project, depth, opts: SvgOptions, mode: str):
     """辺を等分して可視判定し、(全可視の辺, 部分可視の線分) に分ける。"""
     verts, edges = data["verts"], data["edges"]
@@ -609,31 +683,33 @@ def visible_spans(data, project, depth, opts: SvgOptions, mode: str):
     v0 = verts[edges[:, 0]]
     v1 = verts[edges[:, 1]]
     s = max(1, opts.samples)
-    t = (np.arange(s, dtype=np.float64) + 0.5) / s
-    pts = (v0[:, None, :] + (v1 - v0)[:, None, :] * t[None, :, None]
-           ).reshape(m * s, 3)
 
-    x_px, y_px, plane, ray, inside = project(pts)
-
-    if opts.keep_hidden:
-        # 飛ばすのは隠線処理だけで、画面外の切り取りは残す。ここまで
-        # 外すとカメラに写っていない線まで SVG に入り、DRAWING 合わせでは
-        # その範囲に合わせて絵全体が縮む(構図が崩れて見える)
-        vis = inside
-    else:
+    def visible_at(pts: np.ndarray) -> np.ndarray:
+        x_px, y_px, plane, ray, inside = project(pts)
+        if opts.keep_hidden:
+            # 飛ばすのは隠線処理だけで、画面外の切り取りは残す。ここまで
+            # 外すとカメラに写っていない線まで SVG に入り、DRAWING 合わせ
+            # ではその範囲に合わせて絵全体が縮む(構図が崩れて見える)
+            return inside
         expected = ray if mode == "ray" else plane
         buf = sample_depth(depth, x_px, y_px, opts.neighbourhood)
         # 線は面の上にあるので必ず自己遮蔽する。相対バイアスで逃がす
-        vis = inside & (np.isnan(buf)
-                        | (expected <= buf * (1.0 + opts.bias)))
-    vis = vis.reshape(m, s)
+        return inside & (np.isnan(buf)
+                         | (expected <= buf * (1.0 + opts.bias)))
+
+    t = (np.arange(s, dtype=np.float64) + 0.5) / s
+    pts = (v0[:, None, :] + (v1 - v0)[:, None, :] * t[None, :, None]
+           ).reshape(m * s, 3)
+    vis = visible_at(pts).reshape(m, s)
 
     full = vis.all(axis=1)
     none = ~vis.any(axis=1)
 
     # 部分可視は外形線をまたぐ辺くらいなので、ここだけ Python で刻む。
-    # どの辺から出たかも返す(レイヤー分けで出どころが要る)
-    pieces = []
+    # どの辺から出たかも返す(レイヤー分けで出どころが要る)。
+    # 切れ目は標本の間のどこかにあるので、まず「見えている標本」と
+    # 「隠れている標本」の位置で挟んでおき、後でまとめて詰める
+    edge_i, lo_vis, lo_hid, hi_vis, hi_hid = [], [], [], [], []
     for i in np.flatnonzero(~full & ~none):
         row = vis[i]
         j = 0
@@ -644,11 +720,41 @@ def visible_spans(data, project, depth, opts: SvgOptions, mode: str):
             k = j
             while k + 1 < s and row[k + 1]:
                 k += 1
-            d = v1[i] - v0[i]
-            pieces.append((int(i),
-                           v0[i] + d * (j / s), v0[i] + d * ((k + 1) / s)))
+            edge_i.append(int(i))
+            # 端の標本が見えているなら辺の端まで見えていると見なす
+            lo_vis.append(t[j] if j > 0 else 0.0)
+            lo_hid.append(t[j - 1] if j > 0 else 0.0)
+            hi_vis.append(t[k] if k < s - 1 else 1.0)
+            hi_hid.append(t[k + 1] if k < s - 1 else 1.0)
             j = k + 1
-    return full, pieces
+
+    if not edge_i:
+        return full, []
+
+    ei = np.asarray(edge_i)
+    a, b = v0[ei], v1[ei]
+    d = b - a
+    # 両端の切れ目を 1 本の配列にまとめ、全部の線分ぶんを一度に詰める
+    tv = np.concatenate([lo_vis, hi_vis])
+    th = np.concatenate([lo_hid, hi_hid])
+    dd = np.concatenate([d, d])
+    aa = np.concatenate([a, a])
+    active = tv != th
+    for _ in range(REFINE_STEPS):
+        if not active.any():
+            break
+        mid = 0.5 * (tv + th)
+        ok = visible_at(aa[active] + dd[active] * mid[active, None])
+        idx = np.flatnonzero(active)
+        tv[idx[ok]] = mid[idx[ok]]
+        th[idx[~ok]] = mid[idx[~ok]]
+    # 最後は挟んだ区間の真ん中で切る。どちらに寄せても誤差は半分
+    cut = np.where(active, 0.5 * (tv + th), tv)
+    n = len(ei)
+    t0, t1 = cut[:n], cut[n:]
+    p0 = a + d * t0[:, None]
+    p1 = a + d * t1[:, None]
+    return full, [(int(e), p0[i], p1[i]) for i, e in enumerate(ei)]
 
 
 # ---------------------------------------------------------------- 連結
@@ -964,9 +1070,9 @@ def linemerge(lines: list, tol: float) -> list:
     return out
 
 
-def pen_up_travel(lines: list) -> float:
-    """ペンを上げて移動する距離の合計(mm)。原点から描き始める前提。"""
-    cur = np.zeros(2)
+def pen_up_travel(lines: list, home=None) -> float:
+    """ペンを上げて移動する距離の合計(mm)。home(既定は原点)から描き始める前提。"""
+    cur = np.zeros(2) if home is None else np.asarray(home, dtype=np.float64)
     total = 0.0
     for ln in lines:
         total += float(np.hypot(*(ln[0] - cur)))
@@ -974,11 +1080,80 @@ def pen_up_travel(lines: list) -> float:
     return total
 
 
-def linesort(lines: list) -> list:
+# 2-opt で 1 回に見比べる組の数の上限。3千本なら全組(1e7)を見るが、
+# ハッチで 3 万本になったら 100 本先までに絞る。貪欲の並びは近い線が
+# 近くに来ているので、遠くまで見なくても大半の改善は拾える
+_TWO_OPT_BUDGET = 3_000_000
+
+
+def two_opt(lines: list, home=None, max_passes: int = 4) -> list:
+    """貪欲に決めた描画順を 2-opt で詰める。線の向きは反転してよい。
+
+    区間 [i, j] を丸ごと裏返すと、変わるのはその両端の空移動だけ:
+      end[i-1] -> start[i]  が  end[i-1] -> end[j]  に
+      end[j]   -> start[j+1] が  start[i] -> start[j+1] に
+    区間の中の線は順も向きも逆になるが、線と線のつながりはそのまま残る。
+    貪欲は最後のほうで長い跳びを残しがちで、それを畳むのがこの処理。
+
+    窓の幅は本数から決める。i ごとに numpy でまとめて差分を出すので、
+    Python のループは本数 x パス数で済む。
+    """
+    n = len(lines)
+    if n < 3:
+        return lines
+    starts = np.array([ln[0] for ln in lines], dtype=np.float64)
+    ends = np.array([ln[-1] for ln in lines], dtype=np.float64)
+    origin = (np.zeros(2) if home is None
+              else np.asarray(home, dtype=np.float64))
+    # 位置 0 の「前の線の終点」はペンの出発点。配列の先頭に置いておくと
+    # i-1 の参照が常に成り立つ
+    S = np.vstack([origin[None, :], starts])
+    E = np.vstack([origin[None, :], ends])
+    order = np.arange(n + 1)
+    flip = np.zeros(n + 1, dtype=bool)
+    window = int(max(32, min(n, _TWO_OPT_BUDGET // n)))
+
+    def dist(p, q):
+        return np.hypot(p[..., 0] - q[..., 0], p[..., 1] - q[..., 1])
+
+    for _ in range(max_passes):
+        improved = 0.0
+        for i in range(1, n):
+            hi = min(n, i + window)
+            j = np.arange(i, hi + 1)
+            # いまの空移動: end[i-1]->start[i] と end[j]->start[j+1]
+            # (j が末尾なら後者は無い)
+            prev_e = E[i - 1]
+            cur = dist(prev_e, S[i]) + np.where(
+                j < n, dist(E[j], S[np.minimum(j + 1, n)]), 0.0)
+            alt = dist(prev_e, E[j]) + np.where(
+                j < n, dist(S[i], S[np.minimum(j + 1, n)]), 0.0)
+            gain = cur - alt
+            k = int(np.argmax(gain))
+            if gain[k] <= 1e-9:
+                continue
+            jj = int(j[k])
+            sl = slice(i, jj + 1)
+            S[sl], E[sl] = E[sl][::-1].copy(), S[sl][::-1].copy()
+            order[sl] = order[sl][::-1]
+            flip[sl] = ~flip[sl][::-1]
+            improved += float(gain[k])
+        if improved <= 1e-9:
+            break
+
+    out = []
+    for pos in range(1, n + 1):
+        ln = lines[order[pos] - 1]
+        out.append(ln[::-1] if flip[pos] else ln)
+    return out
+
+
+def linesort(lines: list, home=None) -> list:
     """次に描く線を貪欲に選び直す。線の向きは反転してよい。
 
     総当たりは 3万本で 1e9 回になるので、端点を一様グリッドに入れて
     近いセルから外へ広げる。最良値がリングの下限を下回った時点で打ち切る。
+    home はペンの出発点(mm)。プロッタによって原点の隅が違う。
     """
     n = len(lines)
     if n < 2:
@@ -1002,7 +1177,7 @@ def linesort(lines: list) -> list:
     k_lo, k_hi = occupied.min(axis=0), occupied.max(axis=0)
 
     used = np.zeros(n, dtype=bool)
-    cur = np.zeros(2)
+    cur = np.zeros(2) if home is None else np.asarray(home, dtype=np.float64)
     out = []
     for _ in range(n):
         kx, ky = _grid_key(cur, cell)
@@ -1151,6 +1326,10 @@ def layer_pen(name: str, opts: SvgOptions) -> float:
     ペンを割り当てることになるが、SVG のまま見たときにも遠近が出るように
     stroke-width も変えておく。
     """
+    if name == "outline" and opts.outline_pen > 0.0:
+        return opts.outline_pen
+    if name == "hatch" and opts.hatch_pen > 0.0:
+        return opts.hatch_pen
     if not name.startswith("depth"):
         return opts.pen
     try:
@@ -1272,11 +1451,24 @@ def registration_marks(page_w: float, page_h: float,
     return marks
 
 
-def prepare_layers(groups, transform, opts: SvgOptions) -> tuple:
+def pen_home(opts: SvgOptions, page_w: float, page_h: float) -> np.ndarray:
+    """ペンの出発点(mm)。プロッタによって原点の隅が違う(AxiDraw は左上、
+    左下から始まる機種も多い)。並べ替えはここから一番近い線を最初に引く。"""
+    x = page_w if opts.home in ("TR", "BR") else 0.0
+    y = page_h if opts.home in ("BL", "BR") else 0.0
+    return np.array([x, y], dtype=np.float64)
+
+
+def prepare_layers(groups, transform, opts: SvgOptions,
+                   page=None) -> tuple:
     """ピクセル座標の折れ線を紙(mm)に移し、結合・間引き・揺らぎ・並べ替え
     まで済ませる。タイル分割はこの後の切り出しでやるので、ここは1回だけ
-    通す(タイルごとにやり直すと継ぎ目で結果が食い違う)。"""
+    通す(タイルごとにやり直すと継ぎ目で結果が食い違う)。
+
+    page は並べ替えの出発点を決めるための紙(または合成した紙)の大きさ。"""
     scale, off_x, off_y = transform
+    home = (pen_home(opts, *page) if page is not None
+            else np.zeros(2))
     prepared = {}
     stats = {"paths_raw": sum(len(v) for v in groups.values()), "layers": {},
              "_points": 0, "_paths": 0, "_pen_up": 0.0, "_draw_mm": 0.0,
@@ -1298,15 +1490,37 @@ def prepare_layers(groups, transform, opts: SvgOptions) -> tuple:
         # 揺らすのは間引いた後。先にやると RDP がならして消してしまう
         lines = jitter_lines(lines, opts)
         if opts.sort:
-            lines = linesort(lines)
+            # 貪欲で大筋を決めてから 2-opt で跳びを畳む。貪欲だけだと
+            # 最後に取り残した線への長い空移動が残る
+            lines = two_opt(linesort(lines, home), home)
 
         prepared[name] = lines
         stats["layers"][name] = len(lines)
         stats["_paths"] += len(lines)
         stats["_points"] += sum(len(x) for x in lines)
-        stats["_pen_up"] += pen_up_travel(lines)
+        stats["_pen_up"] += pen_up_travel(lines, home)
         stats["_draw_mm"] += drawn_length(lines)
     return prepared, stats
+
+
+def layer_color(name: str, index: int, opts: SvgOptions) -> str:
+    """そのレイヤーの stroke 色。単層(lines / hatch だけ)は黒。
+
+    層に分けたときだけ色を変える。プロッタは色を見ないので出力は変わらず、
+    Inkscape や vpype で開いたときにどの線がどのペンかが見える。
+    """
+    if not opts.layer_colors or (opts.layers == "NONE"
+                                 and name in ("lines", "hatch")):
+        return LAYER_COLORS[0]
+    if name == "hatch":
+        return LAYER_COLORS[-1]
+    palette = LAYER_COLORS[1:-1]
+    # 決まった名前(outline, mecha, depth1 ...)は名前で色を固定する。
+    # 層ごとに別ファイルへ書いても同じ層が同じ色になる。オブジェクト名の
+    # 層は並び順で振る
+    if name in _LAYER_ORDER_HINT:
+        return palette[_LAYER_ORDER_HINT.index(name) % len(palette)]
+    return palette[(index - 1) % len(palette)]
 
 
 def svg_document(prepared, page_w: float, page_h: float,
@@ -1327,7 +1541,7 @@ def svg_document(prepared, page_w: float, page_h: float,
             attrs = (f' inkscape:groupmode="layer" inkscape:label="{name}"'
                      f' id="layer{i}"')
         body.append(
-            f'<g{attrs} fill="none" stroke="#000000"'
+            f'<g{attrs} fill="none" stroke="{layer_color(name, i, opts)}"'
             f' stroke-width="{layer_pen(name, opts):.4g}"\n'
             '   stroke-linecap="round" stroke-linejoin="round">\n'
             + "\n".join(rows) + "\n</g>")
@@ -1376,7 +1590,8 @@ def build_svg(groups, width: int, height: int, opts: SvgOptions,
                                     width, height, opts)
     scale, off_x, off_y = transform
 
-    prepared, stats = prepare_layers(groups, transform, opts)
+    prepared, stats = prepare_layers(groups, transform, opts,
+                                     (page_w, page_h))
     svg = svg_document(prepared, page_w, page_h, opts)
     points = stats.pop("_points")
     paths = stats.pop("_paths")
@@ -1452,7 +1667,8 @@ def export_svg(context, filepath: str, opts: SvgOptions,
     if cols > 1 or rows > 1:
         # 結合・間引き・並べ替えは合成した状態で1回だけ通し、そのあと
         # 1枚ずつ切り出す。タイルごとにやり直すと継ぎ目で結果が変わる
-        prepared, svg_stats = prepare_layers(groups, transform, opts)
+        prepared, svg_stats = prepare_layers(groups, transform, opts,
+                                             (canvas_w, canvas_h))
         for row in range(rows):
             for col in range(cols):
                 sheet = tile_layers(prepared, page_w, page_h, col, row, opts)
@@ -1620,7 +1836,7 @@ def _preview_state(context, opts: SvgOptions = None) -> tuple:
               for o in scene.objects if o.type == "MESH"),
         (opts.depth_res, opts.samples, opts.bias, opts.neighbourhood,
          opts.keep_hidden, opts.seed, opts.respect_paint,
-         tuple(sorted(opts.sources.items()))),
+         opts.crease_angle, tuple(sorted(opts.sources.items()))),
     )
 
 
@@ -1718,11 +1934,13 @@ def enable_preview() -> None:
     if _preview_handle is None:
         _preview_handle = bpy.types.SpaceView3D.draw_handler_add(
             _draw_preview, (), 'WINDOW', 'POST_VIEW')
+    ensure_auto_timer()
 
 
 def disable_preview() -> None:
     """ハンドラを外す。アドオンの unregister からも呼ぶこと。"""
     global _preview_handle, _preview_segments, _preview_stamp
+    stop_auto_timer()
     if _preview_handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_preview_handle, 'WINDOW')
         _preview_handle = None
@@ -1748,6 +1966,92 @@ def refresh_preview(context) -> str:
 
 def preview_info() -> str:
     return _preview_info
+
+
+# ------------------------------------------------- プレビューの自動更新
+# 古くなったプレビューを黙って引き直す。bpy.app.handlers は使わず、タイマー
+# で状態の印を見比べるだけにする(ハンドラだと編集のたびに呼ばれ、しかも
+# 描画の途中で深度レンダーを走らせることになる)。カメラを掴んで動かして
+# いる間は毎回計算しても意味がないので、状態が _AUTO_SETTLE 秒止まって
+# から 1 回だけ計算する
+_AUTO_TICK = 0.25        # 印を見比べる間隔(秒)
+_AUTO_SETTLE = 0.75      # 状態が止まってから引き直すまでの間(秒)
+_auto_pending = None     # (止まったときの印, その時刻)
+_auto_failed = None      # 計算に失敗した印。同じ状態のまま再挑戦しない
+
+
+def auto_refresh_wanted() -> bool:
+    """自動更新を回すべき状態か。プレビューが出ていて、設定が ON のとき。"""
+    if not preview_enabled():
+        return False
+    scene = getattr(bpy.context, "scene", None)
+    return bool(scene is not None
+                and getattr(scene, "fpm_svg_preview_auto", False))
+
+
+def _auto_refresh_tick():
+    """タイマー本体。戻り値が None なら外れる。"""
+    global _auto_pending, _auto_failed
+    import time
+
+    if not auto_refresh_wanted():
+        _auto_pending = None
+        return None
+
+    wm = bpy.context.window_manager
+    win = wm.windows[0] if wm is not None and len(wm.windows) else None
+    if win is None:
+        return _AUTO_TICK
+    # タイマーの context は窓を持たない。window を差し込むと scene や
+    # view_layer、depsgraph が普通に引ける
+    with bpy.context.temp_override(window=win, screen=win.screen,
+                                   scene=win.scene,
+                                   view_layer=win.view_layer):
+        ctx = bpy.context
+        try:
+            state = _preview_state(ctx)
+            stale = (_preview_stamp is not None and state != _preview_stamp)
+        except (AttributeError, ReferenceError, TypeError):
+            return _AUTO_TICK
+        if not stale:
+            _auto_pending = None
+            return _AUTO_TICK
+        if state == _auto_failed:
+            return _AUTO_TICK
+        now = time.monotonic()
+        if _auto_pending is None or _auto_pending[0] != state:
+            _auto_pending = (state, now)
+            return _AUTO_TICK
+        if now - _auto_pending[1] < _AUTO_SETTLE:
+            return _AUTO_TICK
+        _auto_pending = None
+        try:
+            refresh_preview(ctx)
+            _auto_failed = None
+        except RuntimeError as exc:
+            # 線が無い・カメラが無いなど。同じ状態で何度も試さない
+            logger.info("SVG preview auto refresh skipped: %s", exc)
+            _auto_failed = state
+    return _AUTO_TICK
+
+
+def ensure_auto_timer() -> None:
+    """要るときだけタイマーを掛ける。二重には掛けない。"""
+    global _auto_pending, _auto_failed
+    if not auto_refresh_wanted():
+        return
+    if not bpy.app.timers.is_registered(_auto_refresh_tick):
+        _auto_pending = None
+        _auto_failed = None
+        bpy.app.timers.register(_auto_refresh_tick,
+                                first_interval=_AUTO_TICK)
+
+
+def stop_auto_timer() -> None:
+    global _auto_pending
+    _auto_pending = None
+    if bpy.app.timers.is_registered(_auto_refresh_tick):
+        bpy.app.timers.unregister(_auto_refresh_tick)
 
 
 class FP_OT_SVG_PREVIEW(bpy.types.Operator):
@@ -1844,124 +2148,240 @@ class FP_OT_SVG_PRESET(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# ------------------------------------------------------- カメラ一括出力
-class FP_OT_EXPORT_SVG_CAMERAS(bpy.types.Operator):
+# ------------------------------------------------------- 一括出力
+class _SvgBatch:
+    """カメラ一括・フレーム一括の共通部分。
+
+    UI から呼ばれたときはモーダルで 1 件ずつ進める。フレーム範囲が 250 で
+    1 件 5 秒なら 20 分、その間 Blender が固まって Esc も効かないのでは
+    使えない。タイマーのたびに 1 件書いて、進み具合をステータスバーと
+    マウスカーソルに出し、Esc で残りを諦める。スクリプトからの execute は
+    従来どおり同期で全部回す(ヘッドレスではモーダルが動かない)。
+
+    派生側は _jobs(context) で仕事のリストを、_run(context, job) で 1 件を、
+    _restore(context) で後片付けを持つ。
+    """
+
+    _jobs_list = None
+    _index = 0
+    _done = 0
+    _failed = None
+    _timer = None
+    _root = ""
+    _label = "items"
+
+    def _root_dir(self, context) -> str:
+        import os
+        root = bpy.path.abspath("//svg_exports")
+        os.makedirs(root, exist_ok=True)
+        return root
+
+    def _begin(self, context):
+        if not bpy.data.filepath:
+            self.report({'ERROR'}, "Save the .blend file first")
+            return False
+        self._root = self._root_dir(context)
+        self._opts = SvgOptions.from_scene(context.scene)
+        jobs = self._jobs(context)
+        if not jobs:
+            return False
+        self._jobs_list = jobs
+        self._index = 0
+        self._done = 0
+        self._failed = []
+        return True
+
+    def _step(self, context) -> bool:
+        """1 件書く。まだ残りがあれば True。"""
+        if self._index >= len(self._jobs_list):
+            return False
+        job = self._jobs_list[self._index]
+        self._index += 1
+        try:
+            self._run(context, job)
+            self._done += 1
+        except RuntimeError as exc:
+            # 1 件こけても残りは出す。どれが駄目だったかは報告する
+            logger.exception("SVG export failed for %s", job)
+            self._failed.append(f"{self._name(job)}: {exc}")
+        return self._index < len(self._jobs_list)
+
+    def _end(self, context, cancelled: bool = False):
+        self._restore(context)
+        n = len(self._jobs_list)
+        if cancelled:
+            self.report({'WARNING'},
+                        f"Cancelled: {self._done}/{n} {self._label} "
+                        f"-> {self._root}")
+        elif self._failed:
+            self.report({'WARNING'},
+                        f"{self._done}/{n} {self._label} -> {self._root} "
+                        f"({len(self._failed)} failed: {self._failed[0]})")
+        else:
+            self.report({'INFO'},
+                        f"{self._done} {self._label} -> {self._root}")
+
+    # --- 同期(スクリプト・ヘッドレス)
+    def execute(self, context):
+        if not self._begin(context):
+            return {'CANCELLED'}
+        wm = context.window_manager
+        wm.progress_begin(0, len(self._jobs_list))
+        try:
+            while True:
+                more = self._step(context)
+                wm.progress_update(self._index)
+                if not more:
+                    break
+        finally:
+            wm.progress_end()
+        self._end(context)
+        return {'FINISHED'}
+
+    # --- モーダル(UI)
+    def invoke(self, context, event):
+        if not self._begin(context):
+            return {'CANCELLED'}
+        wm = context.window_manager
+        wm.progress_begin(0, len(self._jobs_list))
+        self._status(context)
+        self._timer = wm.event_timer_add(0.01, window=context.window)
+        wm.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def _status(self, context):
+        n = len(self._jobs_list)
+        try:
+            context.workspace.status_text_set(
+                f"SVG {self._index}/{n} {self._label} - Esc to cancel")
+        except AttributeError:
+            pass
+
+    def _finish_modal(self, context, cancelled: bool):
+        wm = context.window_manager
+        if self._timer is not None:
+            wm.event_timer_remove(self._timer)
+            self._timer = None
+        wm.progress_end()
+        try:
+            context.workspace.status_text_set(None)
+        except AttributeError:
+            pass
+        self._end(context, cancelled)
+        for area in getattr(context.screen, "areas", ()):
+            area.tag_redraw()
+
+    def modal(self, context, event):
+        if event.type == 'ESC':
+            self._finish_modal(context, cancelled=True)
+            return {'CANCELLED'}
+        if event.type != 'TIMER':
+            return {'PASS_THROUGH'}
+        more = self._step(context)
+        context.window_manager.progress_update(self._index)
+        self._status(context)
+        if more:
+            return {'RUNNING_MODAL'}
+        self._finish_modal(context, cancelled=False)
+        return {'FINISHED'}
+
+    def cancel(self, context):
+        # 窓が閉じられたなど、Blender 側から止められたとき
+        if self._timer is not None:
+            self._finish_modal(context, cancelled=True)
+
+
+class FP_OT_EXPORT_SVG_CAMERAS(_SvgBatch, bpy.types.Operator):
     """Export an SVG for every camera ticked in STEP5."""
 
     bl_idname = "fpm.export_svg_cameras"
     bl_label = "Export checked cameras"
     bl_description = ("Write one SVG per checked camera into "
-                      "//svg_exports/. Uses the same camera ticks as STEP5")
+                      "//svg_exports/. Uses the same camera ticks as STEP5. "
+                      "Esc cancels")
     bl_options = {'REGISTER'}
+
+    _label = "cameras"
 
     @classmethod
     def poll(cls, context):
         return bool(bpy.data.filepath)
 
-    def execute(self, context):
-        import os
-        import re
-
+    def _jobs(self, context):
         scene = context.scene
-        if not bpy.data.filepath:
-            self.report({'ERROR'}, "Save the .blend file first")
-            return {'CANCELLED'}
-
         cameras = sorted(
             (o for o in scene.objects
              if o.type == "CAMERA" and getattr(o, "fpm_cam_render", True)),
             key=lambda o: o.name.lower())
         if not cameras:
             self.report({'ERROR'}, "No cameras checked")
-            return {'CANCELLED'}
+            return []
+        self._original = scene.camera
+        self._objs = target_objects(context)
+        return [(i, cam.name) for i, cam in enumerate(cameras, start=1)]
 
-        root = bpy.path.abspath("//svg_exports")
-        os.makedirs(root, exist_ok=True)
-        opts = SvgOptions.from_scene(scene)
-        objs = target_objects(context)
+    @staticmethod
+    def _name(job):
+        return job[1]
 
-        original = scene.camera
-        done, failed = 0, []
-        try:
-            for index, camera in enumerate(cameras, start=1):
-                scene.camera = camera
-                context.view_layer.update()
-                safe = re.sub(r'[\\/:*?"<>|]', "_", camera.name)
-                out = os.path.join(root, f"{index:02d}_{safe}.svg")
-                try:
-                    export_svg(context, out, opts, objs)
-                    done += 1
-                except RuntimeError as exc:
-                    # 1台こけても残りは出す。どれが駄目だったかは報告する
-                    logger.exception("SVG export failed for %s", camera.name)
-                    failed.append(f"{camera.name}: {exc}")
-        finally:
-            scene.camera = original
-            context.view_layer.update()
+    def _run(self, context, job):
+        import os
+        import re
+        index, name = job
+        scene = context.scene
+        camera = scene.objects.get(name)
+        if camera is None:
+            raise RuntimeError("camera is gone")
+        scene.camera = camera
+        context.view_layer.update()
+        safe = re.sub(r'[\\/:*?"<>|]', "_", name)
+        out = os.path.join(self._root, f"{index:02d}_{safe}.svg")
+        export_svg(context, out, self._opts, self._objs)
 
-        if failed:
-            self.report({'WARNING'},
-                        f"{done}/{len(cameras)} cameras -> {root} "
-                        f"({len(failed)} failed: {failed[0]})")
-        else:
-            self.report({'INFO'}, f"{done} cameras -> {root}")
-        return {'FINISHED'}
+    def _restore(self, context):
+        context.scene.camera = self._original
+        context.view_layer.update()
 
 
-class FPM_OT_EXPORT_SVG_FRAMES(bpy.types.Operator):
+class FPM_OT_EXPORT_SVG_FRAMES(_SvgBatch, bpy.types.Operator):
     """Export one SVG per frame over the scene's frame range."""
 
     bl_idname = "fpm.export_svg_frames"
     bl_label = "Export frame range"
     bl_description = ("Write one SVG per frame into //svg_exports/, using "
-                      "the scene's frame range and step")
+                      "the scene's frame range and step. Esc cancels")
     bl_options = {'REGISTER'}
+
+    _label = "frames"
 
     @classmethod
     def poll(cls, context):
         return bool(bpy.data.filepath) and context.scene.camera is not None
 
-    def execute(self, context):
-        import os
-
+    def _jobs(self, context):
         scene = context.scene
-        if not bpy.data.filepath:
-            self.report({'ERROR'}, "Save the .blend file first")
-            return {'CANCELLED'}
-
-        root = bpy.path.abspath("//svg_exports")
-        os.makedirs(root, exist_ok=True)
-        opts = SvgOptions.from_scene(scene)
-
         start, end = scene.frame_start, scene.frame_end
         step = max(1, scene.frame_step)
         frames = list(range(start, end + 1, step))
         if not frames:
             self.report({'ERROR'}, "Empty frame range")
-            return {'CANCELLED'}
+            return []
+        self._original = scene.frame_current
+        return frames
 
-        original = scene.frame_current
-        done, failed = 0, []
-        try:
-            for frame in frames:
-                scene.frame_set(frame)
-                # 対象はフレームごとに取り直す。可視性はアニメーションで
-                # 変わりうるし、評価後のメッシュも当然変わる
-                objs = target_objects(context)
-                out = os.path.join(root, f"frame_{frame:04d}.svg")
-                try:
-                    export_svg(context, out, opts, objs)
-                    done += 1
-                except RuntimeError as exc:
-                    logger.exception("SVG export failed on frame %s", frame)
-                    failed.append(f"{frame}: {exc}")
-        finally:
-            scene.frame_set(original)
+    @staticmethod
+    def _name(job):
+        return str(job)
 
-        if failed:
-            self.report({'WARNING'},
-                        f"{done}/{len(frames)} frames -> {root} "
-                        f"({len(failed)} failed: {failed[0]})")
-        else:
-            self.report({'INFO'}, f"{done} frames -> {root}")
-        return {'FINISHED'}
+    def _run(self, context, frame):
+        import os
+        scene = context.scene
+        scene.frame_set(frame)
+        # 対象はフレームごとに取り直す。可視性はアニメーションで
+        # 変わりうるし、評価後のメッシュも当然変わる
+        objs = target_objects(context)
+        out = os.path.join(self._root, f"frame_{frame:04d}.svg")
+        export_svg(context, out, self._opts, objs)
+
+    def _restore(self, context):
+        context.scene.frame_set(self._original)

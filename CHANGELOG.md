@@ -1,5 +1,82 @@
 # FreePencil2 - Changelog
 
+## [2.13.0] - 2026-09-11
+### Changed
+- **Where a line disappears behind something is now found to 1/256 of the
+  edge, not 1/8.** A partially hidden edge used to be cut at the boundary
+  between two of its 8 visibility samples, so the end of every line that
+  runs behind a silhouette was off by up to an eighth of the edge - a
+  visible gap or overshoot at each contour crossing on long CAD edges.
+  The cut is now bisected five times against the depth pass between the
+  last visible and first hidden sample (`REFINE_STEPS`), which only costs
+  five more projections for the partially visible edges. A side effect on
+  the demo scene: pieces from neighbouring edges now meet at the true
+  crossing, so they merge (294 -> 288 paths at 400 px) and the drawn
+  length grows by 1.5% - that is the line that was missing.
+
+  This is the one change that touches the cross-version claim. Counts
+  (edges, paths, points, layer split) still match exactly on 4.2.23 /
+  4.3.2 / 4.5.6 / 5.2.1, but the refined cut lands wherever the EEVEE
+  depth pass of that version puts the pixel, so the drawn length differs
+  by 0.2 mm in 1232 (1231.9 on 4.2/4.3, 1232.1 on 4.5/5.2). At 1600 px
+  the versions already disagreed by more than that before this release.
+
+- **The draw order is improved with 2-opt after the greedy sort.** The
+  greedy nearest-neighbour pass leaves long jumps back to lines it skipped;
+  reversing a run of the sequence removes them and changes nothing but the
+  two pen-up moves at its ends (`two_opt`). Measured on the demo scene:
+  pen-up travel 782 -> 590 mm (-24.5%) at 400 px, 716 -> 527 mm (-26%) at
+  1600 px, with the drawn set unchanged. The window of candidates scales
+  with the path count (3e6 comparisons a pass) so 3000 paths look at every
+  pair and 30000 hatch lines look 100 ahead; 400 paths take 0.25 s.
+
+- **Pen home** (Advanced -> Paths) says which corner the plotter parks in
+  (top left by default, as AxiDraw). The sort starts from there, so the
+  first move is short instead of always assuming the SVG origin.
+
+### Added
+- **The preview refreshes on its own.** 2.12.0 made the overlay admit it
+  was stale; now a timer (`bpy.app.timers`, no depsgraph handlers) polls
+  the same stamp four times a second and recomputes once the camera,
+  meshes and settings have held still for 0.75 s, so dragging the camera
+  does not fire a depth render on every event. `Auto refresh` sits next
+  to the preview buttons and is on by default; turn it off on a scene
+  where the preview takes long enough to notice. The panel says
+  "updating" rather than "refresh" while it is on. Verified in a windowed
+  Blender: moving the camera produced a fresh overlay 1.4 s later.
+
+- **Batch exports run modally and can be cancelled.** `Export checked
+  cameras` and `Export frame range` used to block Blender for the whole
+  run - 250 frames at 5 s each is 20 minutes with no way out. Pressed
+  from the panel they now write one file per timer tick, show
+  `SVG 12/250 frames - Esc to cancel` in the status bar and the progress
+  cursor, and Esc stops after the current file; the original camera or
+  frame is restored either way. Called from a script (`bpy.ops` in
+  background mode) `execute` still runs synchronously, so the batch
+  harness and the tests are unchanged.
+
+- **Three hand-marked line sources**, off by default, for adding lines
+  without touching the vertex colours: **Freestyle marks** (Edit mode:
+  Edge > Mark Freestyle Edge; read from the `freestyle_edge` attribute
+  so it works on every supported version), **Sharp marks**, and
+  **Crease angle** (dihedral angle at or above a threshold, 60 degrees by
+  default). They take part in the layer split like any other source.
+
+- **Layers get their own stroke colour** (`Colour layers`, on by default)
+  so the pens are told apart in Inkscape and vpype; the colour is fixed
+  by layer name, so a layer keeps its colour when written to its own
+  file. Plotters ignore colour and a single-layer export stays black.
+  **Outline pen width** and **Hatch pen width** (0 = same as the pen)
+  give those two layers their own `stroke-width`, since the outline layer
+  was documented as "for a heavier pen" but always wrote the main width.
+
+### Tests
+- 84 (was 77), all passing on 4.2.23, 4.3.2, 4.5.6 and 5.2.1: the cut
+  refinement on a synthetic depth buffer, 2-opt shortening and preserving
+  the line set, pen home corners, the three new sources, layer colours
+  and widths, the auto-refresh timer following the preview and its
+  toggle, and the batch operators keeping a synchronous `execute`.
+
 ## [2.12.0] - 2026-09-10
 ### Changed
 - **STEP0 no longer builds the raster pipeline by default.** The SVG export -

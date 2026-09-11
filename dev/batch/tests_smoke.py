@@ -3003,6 +3003,249 @@ def t72():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@test("SVG: the occlusion cut is refined past the sample spacing")
+def t73():
+    """部分可視の辺は標本の境で切られていたので、切れ目の位置は辺の 1/s
+    の刻みでしか合わなかった(8 標本で辺の 1/8)。二分探索で詰めた後は
+    1/256 まで寄る。合成の深度バッファで固定する。"""
+    import numpy as np
+    from freepencil2 import svg_export
+
+    W, H = 1000, 100
+    # 平行投影のつもり: ワールド x がそのまま画素 x、深度は z
+    def project(pts):
+        pts = np.asarray(pts, dtype=np.float64)
+        x = pts[:, 0] * W
+        y = np.full(len(pts), H * 0.5)
+        z = pts[:, 2]
+        inside = (x >= 0) & (x < W) & (z > 0)
+        return x, y, z, z, inside
+
+    # 画面の x >= 0.30 に、辺(深度 2.0)より手前の壁(深度 1.0)
+    depth = np.full((H, W), np.nan)
+    depth[:, int(0.30 * W):] = 1.0
+    data = {"verts": np.array([[0.0, 0.0, 2.0], [1.0, 0.0, 2.0]]),
+            "edges": np.array([[0, 1]])}
+    opts = svg_export.SvgOptions(samples=8, bias=0.0, neighbourhood=0)
+    full, pieces = svg_export.visible_spans(data, project, depth, opts,
+                                            "plane")
+    assert not full.any() and len(pieces) == 1, (full, pieces)
+    _, a, b = pieces[0]
+    assert abs(a[0] - 0.0) < 1e-9, a
+    # 標本だけなら 0.25 で切れる(誤差 0.05)。詰めた後は 0.01 以内
+    assert abs(b[0] - 0.30) < 0.01, f"切れ目が粗い: {b[0]:.4f} (期待 0.30)"
+
+    # 両側が隠れている辺: 真ん中だけ残り、両端とも詰まっていること
+    depth[:] = 1.0
+    depth[:, int(0.42 * W):int(0.71 * W)] = np.nan
+    full, pieces = svg_export.visible_spans(data, project, depth, opts,
+                                            "plane")
+    assert len(pieces) == 1, pieces
+    _, a, b = pieces[0]
+    assert abs(a[0] - 0.42) < 0.01 and abs(b[0] - 0.71) < 0.01, (a, b)
+
+    # 全可視・全不可視は従来どおり pieces に出ない
+    depth[:] = np.nan
+    full, pieces = svg_export.visible_spans(data, project, depth, opts,
+                                            "plane")
+    assert full.all() and not pieces
+
+
+@test("SVG: 2-opt shortens the greedy order and keeps every line")
+def t74():
+    import numpy as np
+    from freepencil2 import svg_export
+
+    rng = np.random.default_rng(3)
+    lines = []
+    for _ in range(400):
+        p0 = rng.random(2) * 200.0
+        lines.append(np.array([p0, p0 + rng.random(2) * 4.0]))
+
+    def canon(ls):
+        return sorted(min(tuple(np.round(ln, 6).ravel()),
+                          tuple(np.round(ln[::-1], 6).ravel())) for ln in ls)
+
+    greedy = svg_export.linesort(lines)
+    better = svg_export.two_opt(greedy)
+    before = svg_export.pen_up_travel(greedy)
+    after = svg_export.pen_up_travel(better)
+    assert after < before * 0.95, (
+        f"2-opt が効いていない: {before:.1f} -> {after:.1f}")
+    assert canon(better) == canon(lines), "線が増減した、または形が変わった"
+
+    # ペンの原点を右下にすると、最初の線はそちら側から始まる
+    home = np.array([297.0, 210.0])
+    first = svg_export.two_opt(svg_export.linesort(lines, home), home)[0]
+    far = svg_export.two_opt(svg_export.linesort(lines), None)[0]
+    d_home = float(np.hypot(*(first[0] - home)))
+    d_far = float(np.hypot(*(far[0] - home)))
+    assert d_home < d_far, f"原点が効いていない: {d_home:.1f} vs {d_far:.1f}"
+
+    # 短すぎる入力はそのまま
+    one = [np.array([[0.0, 0.0], [1.0, 1.0]])]
+    assert svg_export.two_opt(one) is one
+
+
+@test("SVG: pen home corner moves where the sort starts")
+def t75():
+    from freepencil2 import svg_export
+
+    for corner, want in (("TL", (0.0, 0.0)), ("TR", (297.0, 0.0)),
+                         ("BL", (0.0, 210.0)), ("BR", (297.0, 210.0))):
+        got = svg_export.pen_home(svg_export.SvgOptions(home=corner),
+                                  297.0, 210.0)
+        assert tuple(got) == want, (corner, tuple(got))
+    assert svg_export.SvgOptions().home == "TL"
+
+
+@test("SVG: freestyle / sharp / crease sources add hand-marked edges")
+def t76():
+    import numpy as np
+    from freepencil2 import svg_export
+
+    objs = _svg_scene()
+    mesh = objs[0].data
+    off = {s: False for s in svg_export.LINE_SOURCES}
+    for name in ("freestyle", "sharp", "crease"):
+        assert svg_export.SvgOptions().sources[name] is False, name
+
+    # 何もマークしていなければ 0 本
+    assert _n_edges(svg_export.SvgOptions(
+        sources={**off, "freestyle": True})) == 0
+    assert _n_edges(svg_export.SvgOptions(sources={**off, "sharp": True})) == 0
+
+    # Freestyle / Sharp をマークすると、その本数だけ出る
+    ne = len(mesh.edges)
+    marks = np.zeros(ne, dtype=bool)
+    marks[::7] = True
+    attr = mesh.attributes.get(svg_export.FREESTYLE_EDGE_ATTR)
+    if attr is None:
+        attr = mesh.attributes.new(svg_export.FREESTYLE_EDGE_ATTR,
+                                   "BOOLEAN", "EDGE")
+    attr.data.foreach_set("value", marks)
+    mesh.update()
+    got = _n_edges(svg_export.SvgOptions(sources={**off, "freestyle": True}))
+    assert got == int(marks.sum()), f"freestyle: {got} != {marks.sum()}"
+
+    sharp = np.zeros(ne, dtype=bool)
+    sharp[1::5] = True
+    mesh.edges.foreach_set("use_edge_sharp", sharp)
+    mesh.update()
+    got = _n_edges(svg_export.SvgOptions(sources={**off, "sharp": True}))
+    assert got == int(sharp.sum()), f"sharp: {got} != {sharp.sum()}"
+
+    # 折れ目: しきい値を上げるほど減り、0 度なら面 2 枚の辺は全部出る
+    two_face = _n_edges(svg_export.SvgOptions(
+        sources={**off, "crease": True}, crease_angle=0.0))
+    some = _n_edges(svg_export.SvgOptions(
+        sources={**off, "crease": True}, crease_angle=30.0))
+    none = _n_edges(svg_export.SvgOptions(
+        sources={**off, "crease": True}, crease_angle=180.0))
+    assert two_face > some > 0, (two_face, some)
+    assert none < some, (none, some)
+    # open と合わせると辺の総数になる(面 2 枚あるか無いかのどちらか)
+    total = _n_edges(svg_export.SvgOptions(
+        sources={**off, "crease": True, "open": True}, crease_angle=0.0))
+    assert total == ne, (total, ne)
+
+
+@test("SVG: layers get their own colour and pen width, a single layer stays black")
+def t77():
+    import re
+    import shutil
+    import tempfile
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fpm_svg_"))
+    try:
+        st = svg_export.export_svg(
+            bpy.context, str(tmp / "one.svg"),
+            svg_export.SvgOptions(depth_res=320))
+        text = Path(st["svg"]).read_text(encoding="utf-8")
+        assert set(re.findall(r'stroke="(#[0-9a-f]{6})"', text)) == {
+            "#000000"}, "単層が黒でない"
+
+        st = svg_export.export_svg(
+            bpy.context, str(tmp / "src.svg"),
+            svg_export.SvgOptions(depth_res=320, layers="SOURCE",
+                                  outline_pen=0.8, pen=0.3))
+        text = Path(st["svg"]).read_text(encoding="utf-8")
+        groups = re.findall(
+            r'inkscape:label="(\w+)"[^>]*stroke="(#[0-9a-f]{6})"'
+            r'[^>]*stroke-width="([0-9.]+)"', text)
+        assert len(groups) >= 2, f"層が足りない: {groups}"
+        colors = [c for _, c, _ in groups]
+        assert len(set(colors)) == len(colors), f"層の色が重なった: {groups}"
+        widths = {name: float(w) for name, _, w in groups}
+        assert widths.get("outline") == 0.8, widths
+        assert all(w == 0.3 for n, w in widths.items() if n != "outline"), (
+            widths)
+
+        # 色分けを切れば全部黒
+        st = svg_export.export_svg(
+            bpy.context, str(tmp / "mono.svg"),
+            svg_export.SvgOptions(depth_res=320, layers="SOURCE",
+                                  layer_colors=False))
+        text = Path(st["svg"]).read_text(encoding="utf-8")
+        assert set(re.findall(r'stroke="(#[0-9a-f]{6})"', text)) == {
+            "#000000"}
+
+        # 名前で色が決まるので、層ごとに別ファイルにしても同じ層は同じ色
+        st = svg_export.export_svg(
+            bpy.context, str(tmp / "split.svg"),
+            svg_export.SvgOptions(depth_res=320, layers="SOURCE",
+                                  split_files=True))
+        per_file = {}
+        for f in st["files"]:
+            t = Path(f).read_text(encoding="utf-8")
+            m = re.search(r'inkscape:label="(\w+)"[^>]*stroke="(#[0-9a-f]{6})"',
+                          t)
+            per_file[m.group(1)] = m.group(2)
+        for name, color in per_file.items():
+            assert color == svg_export.layer_color(
+                name, 1, svg_export.SvgOptions(layers="SOURCE")), (name, color)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("SVG: the preview auto-refresh timer follows the preview and its toggle")
+def t78():
+    from freepencil2 import svg_export
+
+    _svg_scene()
+    scene = bpy.context.scene
+    scene.fpm_svg_preview_auto = True
+    svg_export.disable_preview()
+    assert not bpy.app.timers.is_registered(svg_export._auto_refresh_tick)
+
+    svg_export.enable_preview()
+    assert bpy.app.timers.is_registered(svg_export._auto_refresh_tick), (
+        "プレビューを出してもタイマーが掛からない")
+    scene.fpm_svg_preview_auto = False
+    assert not bpy.app.timers.is_registered(svg_export._auto_refresh_tick), (
+        "OFF にしてもタイマーが残る")
+    scene.fpm_svg_preview_auto = True
+    assert bpy.app.timers.is_registered(svg_export._auto_refresh_tick)
+    svg_export.disable_preview()
+    assert not bpy.app.timers.is_registered(svg_export._auto_refresh_tick), (
+        "プレビューを消してもタイマーが残る")
+    # プレビューが無いのに ON にしてもタイマーは掛からない
+    assert not svg_export.auto_refresh_wanted()
+
+
+@test("SVG: batch operators keep a synchronous execute for scripts")
+def t79():
+    from freepencil2 import svg_export
+
+    for cls in (svg_export.FP_OT_EXPORT_SVG_CAMERAS,
+                svg_export.FPM_OT_EXPORT_SVG_FRAMES):
+        for name in ("execute", "invoke", "modal", "cancel"):
+            assert callable(getattr(cls, name, None)), (cls.__name__, name)
+        assert "Esc" in cls.bl_description, cls.bl_description
+
+
 def main():
     print("[tests] FreePencil smoke tests")
     fp_batch.install_addon()

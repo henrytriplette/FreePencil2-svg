@@ -57,6 +57,15 @@ def _update_svg_preview(self, context):
             area.tag_redraw()
 
 
+def _update_svg_preview_auto(self, context):
+    """自動更新の ON/OFF。ON にしたら(プレビューが出ていれば)タイマーを掛ける。"""
+    from . import svg_export
+    if self.fpm_svg_preview_auto:
+        svg_export.ensure_auto_timer()
+    else:
+        svg_export.stop_auto_timer()
+
+
 def _update_white_preview(self, context):
     """白マテリアル強制プレビューの ON/OFF(非破壊スワップ)。"""
     from . import fp_core
@@ -554,6 +563,31 @@ def register_props():
             description="Edges where the surface turns away from the camera",
             default=True
         ),
+        "fpm_svg_src_freestyle": BoolProperty(
+            name="Freestyle marks",
+            description=("Edges marked for Freestyle (Edit mode: Edge > "
+                         "Mark Freestyle Edge). A way to add lines by hand "
+                         "without painting"),
+            default=False
+        ),
+        "fpm_svg_src_sharp": BoolProperty(
+            name="Sharp marks",
+            description="Edges marked Sharp (Edit mode: Edge > Mark Sharp)",
+            default=False
+        ),
+        "fpm_svg_src_crease": BoolProperty(
+            name="Crease angle",
+            description=("Edges whose dihedral angle is at or above the "
+                         "threshold below. Folds without going through "
+                         "the colour separation"),
+            default=False
+        ),
+        "fpm_svg_crease_angle": FloatProperty(
+            name="Crease angle",
+            description=("Dihedral angle in degrees from which an edge "
+                         "counts as a crease"),
+            default=60.0, min=0.0, max=180.0
+        ),
         "fpm_svg_respect_paint": BoolProperty(
             name="Honour STEP4 paint",
             description=("Drop lines erased with mask_color or made "
@@ -719,6 +753,44 @@ def register_props():
             name="Keep hidden lines",
             description="Skip hidden-line removal (for diagnosis)",
             default=False
+        ),
+        "fpm_svg_home": EnumProperty(
+            name="Pen home",
+            description=("Corner the plotter parks the pen in. The draw "
+                         "order starts from here, so the first move is short"),
+            items=[('TL', "Top left",
+                    "AxiDraw and most Inkscape-driven plotters"),
+                   ('TR', "Top right", ""),
+                   ('BL', "Bottom left", "Most G-code plotters"),
+                   ('BR', "Bottom right", "")],
+            default='TL'
+        ),
+        "fpm_svg_layer_colors": BoolProperty(
+            name="Colour layers",
+            description=("Give each SVG layer its own stroke colour so the "
+                         "pens are told apart in Inkscape or vpype. Plotters "
+                         "ignore colour; a single layer stays black"),
+            default=True
+        ),
+        "fpm_svg_outline_pen": FloatProperty(
+            name="Outline pen width",
+            description=("Stroke width of the outline layer in mm "
+                         "(0 = same as the pen width)"),
+            default=0.0, min=0.0, max=5.0
+        ),
+        "fpm_svg_hatch_pen": FloatProperty(
+            name="Hatch pen width",
+            description=("Stroke width of the hatch layer in mm "
+                         "(0 = same as the pen width)"),
+            default=0.0, min=0.0, max=5.0
+        ),
+        "fpm_svg_preview_auto": BoolProperty(
+            name="Auto refresh",
+            description=("Recompute the preview on its own once the camera, "
+                         "the meshes or the settings have held still for a "
+                         "moment. Turn it off on heavy scenes"),
+            default=True,
+            update=_update_svg_preview_auto
         )
     }
 
@@ -779,7 +851,10 @@ def unregister_props():
         "fpm_svg_tile_cols", "fpm_svg_tile_rows", "fpm_svg_tile_marks",
         "fpm_svg_fit", "fpm_svg_preview", "fpm_svg_plot_speed",
         "fpm_svg_travel_speed", "fpm_svg_pen_lift", "fpm_svg_last_result",
-        "fpm_svg_split_files"
+        "fpm_svg_split_files",
+        "fpm_svg_src_freestyle", "fpm_svg_src_sharp", "fpm_svg_src_crease",
+        "fpm_svg_crease_angle", "fpm_svg_home", "fpm_svg_layer_colors",
+        "fpm_svg_outline_pen", "fpm_svg_hatch_pen", "fpm_svg_preview_auto"
     ]
     
     for prop_name in props_to_clear:
