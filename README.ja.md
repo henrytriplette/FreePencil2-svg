@@ -377,7 +377,8 @@ blender --command extension build --source-dir . --output-dir dist
 上の「ビルドとインストール」の手順でご自身でビルドしてください。過去
 バージョンのソースは git のタグから取得できます。
 
-変更履歴は [CHANGELOG.md](CHANGELOG.md) にあります。
+変更履歴は [CHANGELOG.md](CHANGELOG.md) にあります。パネルごとのボタンと
+設定の一覧は [MANUAL.md](MANUAL.md) にあります(英語)。
 
 ## リポジトリ構成
 
