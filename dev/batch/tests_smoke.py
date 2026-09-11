@@ -2927,6 +2927,41 @@ def t70():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@test("SVG: a tiled single-layer file with marks is well-formed XML")
+def t80():
+    import shutil
+    import tempfile
+    import xml.etree.ElementTree as ET
+    from freepencil2 import svg_export
+
+    # 2.13.0 までは単層(layers=NONE)だと xmlns:inkscape を宣言しなかったが、
+    # トンボの "regmarks" は単層でもレイヤー属性を持つので、接頭辞が未宣言の
+    # まま出て xml.etree が "unbound prefix" で読めなかった。regex で点を
+    # 拾う他のテストは通ってしまうので、ここでは本当に XML として読む
+    _svg_scene()
+    tmp = Path(tempfile.mkdtemp(prefix="fpm_svg_"))
+    try:
+        st = svg_export.export_svg(
+            bpy.context, str(tmp / "t.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="NONE",
+                                  tile_cols=2, tile_rows=1, tile_marks=True))
+        for f in st["files"]:
+            text = Path(f).read_text(encoding="utf-8")
+            assert "inkscape:groupmode" in text, "トンボがレイヤーになっていない"
+            root = ET.fromstring(text)  # 未宣言の接頭辞があればここで落ちる
+            assert root.tag == "{http://www.w3.org/2000/svg}svg", root.tag
+
+        # 単層でタイルもトンボも無ければ、今までどおり宣言しない
+        plain = svg_export.export_svg(
+            bpy.context, str(tmp / "p.svg"),
+            svg_export.SvgOptions(depth_res=400, layers="NONE"))
+        text = Path(plain["files"][0]).read_text(encoding="utf-8")
+        assert "xmlns:inkscape" not in text, "単層に余計な宣言が付いた"
+        ET.fromstring(text)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 @test("batch: svg_metrics returns the plotter figures and ratios")
 def t71():
     import shutil
