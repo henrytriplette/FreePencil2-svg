@@ -405,7 +405,8 @@ this repository's issues.
 build it yourself with the steps under "Building and installing" above.
 Source for past versions is available from the git tags.
 
-The change history is in [CHANGELOG.md](CHANGELOG.md).
+The change history is in [CHANGELOG.md](CHANGELOG.md). A panel-by-panel
+reference of every button and setting is in [MANUAL.md](MANUAL.md).
 
 ## Repository layout
 
